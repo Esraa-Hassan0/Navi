@@ -1,40 +1,89 @@
 package com.searchengine.navi.indexer;
 
-
-
-import com.mongodb.ConnectionString;
-import com.mongodb.MongoClientSettings;
-import com.mongodb.MongoException;
-import com.mongodb.ServerApi;
-import com.mongodb.ServerApiVersion;
-import com.mongodb.client.MongoClient;
-import com.mongodb.client.MongoClients;
-import com.mongodb.client.MongoDatabase;
-import org.bson.Document;
+// import org.bson.Document;
+import org.jsoup.nodes.Document;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.nio.Buffer;
+import java.io.FileReader;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 
 public class Indexer {
-    public static void main(String[] args) {
-        String connectionString = "mongodb+srv://esraa:navi123searchengine@cluster0.adp56.mongodb.net/";
+    private HashSet<String> stopWords;
 
-        ServerApi serverApi = ServerApi.builder()
-                .version(ServerApiVersion.V1)
-                .build();
+    public Indexer() {
+        stopWords = new HashSet<String>();
+    }
 
-        MongoClientSettings settings = MongoClientSettings.builder()
-                .applyConnectionString(new ConnectionString(connectionString))
-                .serverApi(serverApi)
-                .build();
+    public class Token {
+        String word, position;
+        int count;
 
-        // Create a new client and connect to the server
-        try (MongoClient mongoClient = MongoClients.create(settings)) {
-            try {
-                // Send a ping to confirm a successful connection
-                MongoDatabase database = mongoClient.getDatabase("admin");
-                database.runCommand(new Document("ping", 1));
-                System.out.println("Pinged your deployment. You successfully connected to MongoDB!");
-            } catch (MongoException e) {
-                e.printStackTrace();
+        Token(String word, String position) {
+            if (position == null || position.isEmpty()) {
+                position = "text";
             }
+            this.word = word;
+            this.count = 1;
+            this.position = position;
         }
+
+        void increment() {
+            count++;
+        }
+
+    }
+    // TO_BE_Continue
+
+    // public List<String> tokenizeDocument(Document doc) {
+    // String text = doc.text();
+    // List<String> tokens = tokenizeText(text);
+    // HashMap<String, Token> hashTokens = new HashMap<String, Token>();
+
+    // for (String key : hashTokens.keySet()) {
+    // Token token = hashTokens.get(key);
+    // if (hashTokens.containsKey(key)) {
+    // token.increment();
+    // } else {
+    // hashTokens.put(key, new Token(key, ""));
+    // }
+    // }
+
+    // return tokens;
+    // }
+
+    public List<String> tokenizeText(String text) {
+        List<String> tokens = new ArrayList<String>();
+        String restructureText = text.toLowerCase().replaceAll("[^a-z]", "");
+        String[] arrList = restructureText.split("\\s+");
+        for (String s : arrList) {
+            tokens.add(s.trim());
+        }
+        return tokens;
+    }
+
+    public void addStopWords() {
+        try {
+            BufferedReader scanner = new BufferedReader(new FileReader("stopwords.txt"));
+            String line;
+            while ((line = scanner.readLine()) != null) {
+                stopWords.add(line.trim());
+            }
+            scanner.close();
+        } catch (IOException e) {
+            System.out.println(e);
+            return;
+        }
+    }
+
+    public static void main(String[] args) {
+
     }
 }
