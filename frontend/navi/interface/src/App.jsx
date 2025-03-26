@@ -1,13 +1,12 @@
-import './App.css'
+import "./App.css";
+import ResultPage from "./pages/ResultPage/ResultPage";
 
 function App() {
-
-
   return (
     <>
-      <h1>React App</h1>
+      <ResultPage />
     </>
-  )
+  );
 }
 
-export default App
+export default App;
