@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.Buffer;
 import java.io.FileReader;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -15,63 +16,108 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
+import com.searchengine.dbmanager.DBManager;
+
+import ch.qos.logback.core.joran.sanity.Pair;
+
 public class Indexer {
+    static final String RESET = "\u001B[0m";
+    static final String TEAL = "\u001B[36m";
+    static final String YELLOW = "\u001B[33m";
+    static final String RED = "\u001B[31m";
+    static final String GREEN = "\u001B[32m";
+    static final String PURPLE = "\u001B[35m";
+
+    DBManager dbmanager;
     private HashSet<String> stopWords;
 
     public Indexer() {
+        dbmanager = new DBManager();
         stopWords = new HashSet<String>();
+        addStopWords();
     }
 
     public class Token {
-        String word, position;
-        int count;
+        private String word;
+        private ArrayList<Posting> postings;
 
-        Token(String word, String position) {
-            if (position == null || position.isEmpty()) {
-                position = "text";
-            }
+        Token(String word) {
             this.word = word;
-            this.count = 1;
-            this.position = position;
+            this.postings = new ArrayList<>();
         }
 
-        void increment() {
-            count++;
+        public void addPostings(Posting posting) {
+            this.postings.add(posting);
         }
 
+        public ArrayList<Posting> getPostings() {
+            return postings;
+        }
     }
     // TO_BE_Continue
 
-    // public List<String> tokenizeDocument(Document doc) {
-    // String text = doc.text();
-    // List<String> tokens = tokenizeText(text);
-    // HashMap<String, Token> hashTokens = new HashMap<String, Token>();
+    public HashMap<String, Token> tokenizeDocument(Document doc) {
+        HashMap<String, Token> tokenMap = new HashMap<>();
+        String url = doc.location();
+        int docId = dbmanager.retrieveDocID(url);
+        String text = doc.text();
 
-    // for (String key : hashTokens.keySet()) {
-    // Token token = hashTokens.get(key);
-    // if (hashTokens.containsKey(key)) {
-    // token.increment();
-    // } else {
-    // hashTokens.put(key, new Token(key, ""));
-    // }
-    // }
+        // System.out.println(PURPLE);
+        // System.out.println(text);
+        // System.out.println(RESET);
 
-    // return tokens;
-    // }
+        Elements h1Tags = doc.select("h1");
+        Elements h2Tags = doc.select("h2");
+        Elements anchorTags = doc.select("a[href]");
 
-    public List<String> tokenizeText(String text) {
-        List<String> tokens = new ArrayList<String>();
-        String restructureText = text.toLowerCase().replaceAll("[^a-z]", "");
+        // System.out.println(PURPLE + "H1 Tags: " + h1Tags.text() + RESET);
+        // tokenizeText(h1Tags.text(), tokenMap, docId, "h1");
+
+        // System.out.println(PURPLE + "H2 Tags: " + h2Tags.text() + RESET);
+        // tokenizeText(h2Tags.text(), tokenMap, docId, "h2");
+
+        // System.out.println(PURPLE + "Anchor Tags: " + anchorTags.text() + RESET);
+        // tokenizeText(anchorTags.text(), tokenMap, docId, "a");
+
+        tokenizeText(text, tokenMap, docId, "other");
+        return tokenMap;
+    }
+
+    public void tokenizeText(String text, HashMap<String, Token> tokenMap, int docId, String type) {
+        String restructureText = text.toLowerCase().replaceAll("[^a-zA-Z\\s]", "");
         String[] arrList = restructureText.split("\\s+");
+        System.out.println(TEAL + "Tokens before filtering (" + type + "): " + Arrays.toString(arrList) + RESET);
+        int counter = 0;
+
         for (String s : arrList) {
-            tokens.add(s.trim());
+            // to be stemmed
+            String tokenStr = s.trim();
+            if (!tokenStr.isEmpty() && !stopWords.contains(tokenStr)) {
+                counter++;
+                Token token = tokenMap.get(tokenStr);
+                if (token == null) {
+                    token = new Token(tokenStr);
+                    tokenMap.put(tokenStr, token);
+                }
+                Posting posting = null;
+                for (Posting p : token.getPostings()) {
+                    if (p.getDocID() == docId) {
+                        posting = p;
+                        break;
+                    }
+                }
+                if (posting == null) {
+                    posting = new Posting(docId);
+                    token.addPostings(posting);
+                }
+                posting.addPosition(new Position(type, counter));
+            }
         }
-        return tokens;
     }
 
     public void addStopWords() {
         try {
-            BufferedReader scanner = new BufferedReader(new FileReader("stopwords.txt"));
+            BufferedReader scanner = new BufferedReader(new FileReader("Data/stopwords.txt"));
             String line;
             while ((line = scanner.readLine()) != null) {
                 stopWords.add(line.trim());
@@ -83,7 +129,41 @@ public class Indexer {
         }
     }
 
-    public static void main(String[] args) {
+    public void close() {
+        dbmanager.close();
+    }
 
+    public static void main(String[] args) {
+        System.out.println(GREEN + "Starting tokenization..." + RESET);
+        try {
+            Document doc = Jsoup.connect("https://toolsfairy.com/code-test/sample-html-files#").get();
+            Indexer indexer = new Indexer();
+            HashMap<String, Token> tokenMap = indexer.tokenizeDocument(doc);
+
+            System.out.println(GREEN + "Tokenized Words:" + RESET);
+            if (tokenMap.isEmpty()) {
+                System.out.println("No tokens found.");
+            } else {
+                for (String word : tokenMap.keySet()) {
+                    Token token = tokenMap.get(word);
+                    Posting posting = token.getPostings().get(0); // One posting per doc
+                    System.out.print(GREEN + "Word: " + word + RESET + " ->   DocId: " +
+                            posting.getDocID() + ", TF: " + posting.getTF() + ", Positions: [");
+                    // Print all positions
+                    for (int i = 0; i < posting.getPos().size(); i++) {
+                        Position pos = posting.getPos().get(i);
+                        System.out.print("Pos: " + pos.getPos() + " (Type: " + pos.getType() + ")");
+                        if (i < posting.getPos().size() - 1) {
+                            System.out.print(", ");
+                        }
+                    }
+                    System.out.println("]");
+                }
+            }
+            indexer.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        System.out.println(GREEN + "Done." + RESET);
     }
 }
