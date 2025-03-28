@@ -70,14 +70,14 @@ public class Indexer {
         Elements h2Tags = doc.select("h2");
         Elements anchorTags = doc.select("a[href]");
 
-        // System.out.println(PURPLE + "H1 Tags: " + h1Tags.text() + RESET);
-        // tokenizeText(h1Tags.text(), tokenMap, docId, "h1");
+        System.out.println(PURPLE + "H1 Tags: " + h1Tags.text() + RESET);
+        tokenizeText(h1Tags.text(), tokenMap, docId, "h1");
 
-        // System.out.println(PURPLE + "H2 Tags: " + h2Tags.text() + RESET);
-        // tokenizeText(h2Tags.text(), tokenMap, docId, "h2");
+        System.out.println(PURPLE + "H2 Tags: " + h2Tags.text() + RESET);
+        tokenizeText(h2Tags.text(), tokenMap, docId, "h2");
 
-        // System.out.println(PURPLE + "Anchor Tags: " + anchorTags.text() + RESET);
-        // tokenizeText(anchorTags.text(), tokenMap, docId, "a");
+        System.out.println(PURPLE + "Anchor Tags: " + anchorTags.text() + RESET);
+        tokenizeText(anchorTags.text(), tokenMap, docId, "a");
 
         tokenizeText(text, tokenMap, docId, "other");
         return tokenMap;
@@ -110,7 +110,7 @@ public class Indexer {
                     posting = new Posting(docId);
                     token.addPostings(posting);
                 }
-                posting.addPosition(new Position(type, counter));
+                posting.addPosition(type);
             }
         }
     }
@@ -151,8 +151,8 @@ public class Indexer {
                             posting.getDocID() + ", TF: " + posting.getTF() + ", Positions: [");
                     // Print all positions
                     for (int i = 0; i < posting.getPos().size(); i++) {
-                        Position pos = posting.getPos().get(i);
-                        System.out.print("Pos: " + pos.getPos() + " (Type: " + pos.getType() + ")");
+                        String pos = posting.getPos().get(i);
+                        System.out.print(" (Type: " + pos + ")");
                         if (i < posting.getPos().size() - 1) {
                             System.out.print(", ");
                         }
