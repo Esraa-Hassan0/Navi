@@ -1,5 +1,6 @@
 package com.searchengine.dbmanager;
 
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import org.bson.Document;
@@ -73,6 +74,33 @@ public class DBManager {
                 System.out.println("No document found with url: " + url);
                 return -1;
             }
+        } catch (MongoException e) {
+            System.err.println("Error retrieving document ID: " + e.getMessage());
+            e.printStackTrace();
+            return -1;
+        }
+    }
+
+    public int getDocumentsCount() {
+        try {
+            int count = (int) docCollection.countDocuments();
+            return count;
+        } catch (MongoException e) {
+            System.err.println("Error retrieving document ID: " + e.getMessage());
+            e.printStackTrace();
+            return -1;
+        }
+    }
+
+    public int getDF(String word) {
+        try {
+            Document filter = new Document("word", word);
+            Document doc = invertedIndexerCollection.find(filter).first();
+
+            List<?> array = doc.getList("postings", Object.class);
+            int length = array.size();
+
+            return length;
         } catch (MongoException e) {
             System.err.println("Error retrieving document ID: " + e.getMessage());
             e.printStackTrace();
