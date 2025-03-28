@@ -3,51 +3,62 @@
   margin: 0;
   box-sizing: border-box;
 }
-
-.mainContainer.light {
+.pageContainer.light {
   background-color: #faf0f5;
+  min-height: 103vh; /* Full page height */
+}
+.pageContainer.dark {
+  background-color: #4d1531;
+  min-height: 103vh; /* Full page height */
+}
+.mainContainer {
   display: flex;
-  align-items: center; /* Vertically center items */
-  gap: 15px; /* Space between items */
-  padding: 10px; /* Optional: Add padding for better spacing */
-  /* margin: 0 auto; */
+  align-items: center;
+  gap: 15px;
+  padding: 10px;
   margin-top: -10px;
 }
-.mainContainer.dark {
-  background-color: #272526;
+
+.mainContainer {
   display: flex;
-  align-items: center; /* Vertically center items */
-  gap: 15px; /* Space between items */
-  padding: 10px; /* Optional: Add padding for better spacing */
-  /* margin: 0 auto; */
+  align-items: center;
+  gap: 15px;
+  padding: 10px;
   margin-top: -10px;
 }
 
 .logo {
   margin-left: 100px;
-  height: 70px; /* Set a specific height for consistency */
-  margin-top: -10px; /* Remove negative margin unless needed */
+  height: 70px;
+  margin-top: -10px;
 }
 
 .logoLightMode {
   margin-left: 100px;
-  height: 70px; /* Set a specific height for consistency */
-  margin-top: -10px; /* Remove negative margin unless needed */
+  height: 70px;
+  margin-top: -10px;
+}
+
+.searchContainer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex-grow: 1;
+  max-width: 400px;
 }
 
 .SearchBar {
-  flex-grow: 1;
   width: 100%;
   max-width: 400px;
   max-height: 35px;
-  padding: 12px 16px;
+  padding: 12px 16px 12px 40px;
   font-size: 16px;
   border: 2px solid #ccc;
   border-radius: 25px;
   outline: none;
   transition: all 0.3s ease-in-out;
   box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1);
-  background-color: white; /* Override global * background for input */
+  background-color: white;
 }
 
 .SearchBar:focus {
@@ -60,18 +71,79 @@
   font-style: italic;
 }
 
+.searchIcon {
+  position: absolute;
+  left: 12px;
+  font-size: 16px;
+  color: #ec3ef9;
+}
+
+.spinnerIcon {
+  margin-left: 10px;
+  font-size: 16px;
+  color: #f93ee9;
+}
+
 .darkModeIcon {
   height: 50px;
-  font-size: 600px; /* Set icon size */
-  cursor: pointer; /* Optional: Make it look clickable */
+  cursor: pointer;
   margin-left: 830px;
 }
+
 .lightModeIcon {
   height: 50px;
-  font-size: 600px; /* Set icon size */
-  cursor: pointer; /* Optional: Make it look clickable */
+  cursor: pointer;
   margin-left: 830px;
 }
-.searchIcon{
-  font-size: 100px;
+
+.resultsList {
+  margin-top: 20px;
+  margin-left: 200px;
+  list-style: none;
+  padding: 0;
+  width: 100%;
+  max-width: 800px;
+}
+
+.resultItem {
+  padding: 10px;
+  background-color: #fff;
+  border-bottom: 1px solid #ccc;
+  margin-bottom: 10px;
+}
+
+.mainContainer.dark .resultItem {
+  background-color: #3a3a3a;
+  color: #fff;
+}
+
+.resultUrl {
+  font-size: 14px;
+  color: #0066cc;
+  text-decoration: none;
+  display: block; /* Ensure it’s on its own line */
+}
+
+.resultUrl:hover {
+  text-decoration: underline;
+}
+
+.resultTitle {
+  font-size: 18px;
+  margin: 5px 0;
+  color: #1a0dab; /* Typical link blue */
+}
+
+.mainContainer.dark .resultTitle {
+  color: #8ab4f8; /* Lighter blue for dark mode */
+}
+
+.resultSnippet {
+  font-size: 14px;
+  color: #545454;
+  line-height: 1.4;
+}
+
+.mainContainer.dark .resultSnippet {
+  color: #d1d1d1; /* Lighter gray for dark mode */
 }
