@@ -1,23 +1,23 @@
 package com.searchengine.navi.indexer;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
 public class Posting {
     private int docId;
     private int tf;
-    private List<String> type;
+    private Map<String, Integer> type;
 
     public Posting(int docId) {
         this.docId = docId;
         this.tf = 0;
-        this.type = new ArrayList<>();
+        this.type = new HashMap<>();
     }
 
     public void addPosition(String type) {
-        this.type.add(type);
         this.tf++;
-        // this.tf = positions.size();
+
+        this.type.put(type, this.type.getOrDefault(type, 0) + 1);
     }
 
     public int getTF() {
@@ -32,7 +32,7 @@ public class Posting {
         return docId;
     }
 
-    public List<String> getPos() {
+    public Map<String, Integer> getTypeCounts() {
         return type;
     }
 }
