@@ -93,9 +93,15 @@ public class Indexer {
         System.out.println(TEAL + "Tokens before filtering (" + type + "): " + Arrays.toString(arrList) + RESET);
         int counter = 0;
 
+        Stemmer languageStemmer = new Stemmer();
+
         for (String s : arrList) {
             // to be stemmed
             String tokenStr = s.trim();
+            System.out.println(GREEN + "===========BEFORE STEMMING===========\n" + PURPLE + tokenStr + RESET);
+            tokenStr = languageStemmer.stemWord(tokenStr);
+            System.out.println(GREEN + "===========AFTER STEMMING============\n" + YELLOW + tokenStr + RESET);
+
             if (!tokenStr.isEmpty() && !stopWords.contains(tokenStr)) {
                 counter++;
                 Token token = tokenMap.get(tokenStr);
@@ -152,7 +158,7 @@ public class Indexer {
                 for (String word : tokenMap.keySet()) {
                     Token token = tokenMap.get(word);
                     Posting posting = token.getPostings().get(0); // One posting per doc
-                    System.out.print(GREEN + "Word: " + word + RESET + " ->   DocId: " +
+                    System.out.print(GREEN + "Word: " + word + RESET + " -> DocId: " +
                             posting.getDocID() + ", TF: " + posting.getTF() + ", Positions: [");
                     // Print all positions
                     for (int i = 0; i < posting.getPos().size(); i++) {
