@@ -20,6 +20,10 @@ import com.searchengine.dbmanager.DBManager;
 
 import ch.qos.logback.core.joran.sanity.Pair;
 
+//snowball-stemmer library
+import org.tartarus.snowball.*;
+import org.tartarus.snowball.ext.englishStemmer;
+
 public class Indexer {
     static final String RESET = "\u001B[0m";
     static final String TEAL = "\u001B[36m";
@@ -134,6 +138,7 @@ public class Indexer {
     }
 
     public static void main(String[] args) {
+
         System.out.println(GREEN + "Starting tokenization..." + RESET);
         try {
             Document doc = Jsoup.connect("https://toolsfairy.com/code-test/sample-html-files#").get();
