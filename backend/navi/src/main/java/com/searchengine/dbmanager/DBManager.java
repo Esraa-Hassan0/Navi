@@ -2,6 +2,8 @@ package com.searchengine.dbmanager;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.Arrays;
+import java.util.HashMap;
 
 import org.bson.Document;
 import org.bson.types.ObjectId;
@@ -11,10 +13,16 @@ import com.mongodb.MongoClientSettings;
 import com.mongodb.MongoException;
 import com.mongodb.ServerApi;
 import com.mongodb.ServerApiVersion;
+import com.mongodb.client.AggregateIterable;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
+import com.mongodb.client.model.Accumulators;
+import com.mongodb.client.model.Aggregates;
+import com.mongodb.client.model.Filters;
+import com.mongodb.client.model.Projections;
+import org.bson.conversions.Bson;
 
 public class DBManager {
     private MongoClient mongoClient;
@@ -106,6 +114,45 @@ public class DBManager {
             e.printStackTrace();
             return -1;
         }
+    }
+
+    public int getFieldLengthPerDoc(int docId, String field) {
+        try {
+            List<Bson> pipeline = Arrays.asList(
+                    Aggregates.match(Filters.eq("postings.docId", docId)),
+                    Aggregates.unwind("$postings"),
+                    Aggregates.match(Filters.eq("postings.docId", docId)),
+                    Aggregates.unwind("$postings.positions"),
+                    Aggregates.match(Filters.eq("postings.positions.type", field)));
+
+            // Get the AggregateIterable
+            AggregateIterable<Document> aggregateIterable = invertedIndexerCollection.aggregate(pipeline);
+
+            // Count the results by iterating
+            int length = 0;
+            for (Document doc : aggregateIterable) {
+                length++;
+            }
+
+            return length;
+        } catch (MongoException e) {
+            System.err.println("Error retrieving document ID: " + e.getMessage());
+            e.printStackTrace();
+            return -1;
+        }
+    }
+
+    public double getAvgFieldLength(String field) {
+        List<Bson> pipeline = Arrays.asList(
+                Aggregates.unwind("$postings"),
+                Aggregates.unwind("$postings.positions"),
+                Aggregates.match(Filters.eq("postings.positions.type", field)),
+                Aggregates.count("totalCount"));
+
+        Document result = invertedIndexerCollection.aggregate(pipeline).first();
+        double count = result != null ? result.getInteger("totalCount") : 0L;
+
+        return count / getDocumentsCount();
     }
 
     // Optional: Close the connection
