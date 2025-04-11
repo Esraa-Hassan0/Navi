@@ -1,10 +1,12 @@
 import "./App.css";
 import ResultPage from "./pages/ResultPage/ResultPage";
+import SearchPage from "./pages/SearchPage/SearchPage.jsx";
 
 function App() {
   return (
     <>
-      <ResultPage />
+    <SearchPage />
+    {/* <ResultPage /> */}
     </>
   );
 }
