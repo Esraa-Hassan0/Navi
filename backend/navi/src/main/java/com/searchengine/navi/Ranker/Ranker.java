@@ -1,22 +1,28 @@
 package com.searchengine.navi.Ranker;
 
 import java.util.*;
-import java.util.ArrayList;
 import java.lang.Math;
 import com.searchengine.dbmanager.DBManager;
-import java.util.HashMap;
-import java.util.HashSet;
+
+import org.bson.Document;
 
 public class Ranker {
     private double k = 1.5, b = 0.75;
     private double[] avgDocFieldsLengths;
-    private double avgDocLength;
     private String[] fields = { "h1", "h2", "a", "other" };
+    private double[] weight = { 2.5, 2, 1.5, 1 };
     private ArrayList<String> terms;
     private HashMap<Integer, Double> scores;
     private HashSet<Integer> commonDocs;
 
     static DBManager dbManager;
+
+    enum Field {
+        h1,
+        h2,
+        a,
+        other
+    }
 
     public Ranker() {
         dbManager = new DBManager();
@@ -28,13 +34,21 @@ public class Ranker {
 
     void BM25() {
         int size = terms.size();
+        HashMap<Integer, ArrayList<Double>> docFieldLength;
         for (int i = 0; i < size; i++) {
             // get the docs ids from array of postings
+            // for each doc: calculate TF and docfieldlength
         }
     }
 
-    double calculateBM25Score(int IDF, int TF, int docLength) {
-        double result = IDF * (TF * (k + 1) / (TF + k + (1 - b + b * (docLength / avgDocLength))));
+    double calculateBM25FByTerm(String word, int docId) {
+        double IDF = getIDF(word);
+        double result = 0;
+        for (int i = 0; i < 4; i++) {
+            // result += weight[i] * IDF * (TF * (k + 1) / (TF + k + (1 - b + b * (docLength
+            // / avgDocFieldsLengths[i]))));
+        }
+
         return result;
     }
 
@@ -57,12 +71,11 @@ public class Ranker {
     public static void main(String args[]) {
         Ranker r = new Ranker();
 
-        double count = dbManager.getAvgFieldLength("other");
-        double count3 = dbManager.getAvgFieldLength("h1");
-        double count2 = dbManager.getAvgFieldLength("h2");
-        System.out.println("Hi there");
-        System.out.println(count);
-        System.out.println(count2);
-        System.out.println(count3);
+        String searchWord = "blah";
+        List<Document> postings = dbManager.getWordPostings(searchWord);
+
+        System.out.println("DocIds and TFs for '" + searchWord + "':");
+        postings.forEach(posting -> System.out.println("docId: " + posting.getInteger("docId") +
+                ", TF: " + posting.getInteger("TF")));
     }
 }

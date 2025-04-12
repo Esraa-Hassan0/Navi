@@ -2,6 +2,7 @@ package com.searchengine.dbmanager;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 
@@ -143,16 +144,43 @@ public class DBManager {
     }
 
     public double getAvgFieldLength(String field) {
-        List<Bson> pipeline = Arrays.asList(
-                Aggregates.unwind("$postings"),
-                Aggregates.unwind("$postings.positions"),
-                Aggregates.match(Filters.eq("postings.positions.type", field)),
-                Aggregates.count("totalCount"));
+        try {
+            List<Bson> pipeline = Arrays.asList(
+                    Aggregates.unwind("$postings"),
+                    Aggregates.unwind("$postings.positions"),
+                    Aggregates.match(Filters.eq("postings.positions.type", field)),
+                    Aggregates.count("totalCount"));
 
-        Document result = invertedIndexerCollection.aggregate(pipeline).first();
-        double count = result != null ? result.getInteger("totalCount") : 0L;
+            Document result = invertedIndexerCollection.aggregate(pipeline).first();
+            double count = result != null ? result.getInteger("totalCount") : 0L;
 
-        return count / getDocumentsCount();
+            return count / getDocumentsCount();
+        } catch (MongoException e) {
+            System.err.println("Error retrieving document ID: " + e.getMessage());
+            e.printStackTrace();
+            return -1;
+        }
+    }
+
+    public List<Document> getWordPostings(String word) {
+        try {
+            List<Bson> pipeline = Arrays.asList(
+                    Aggregates.match(Filters.eq("word", word)),
+                    Aggregates.project(Projections.fields(
+                            Projections.include("postings.docId", "postings.TF"),
+                            Projections.excludeId())));
+
+            Document result = invertedIndexerCollection.aggregate(pipeline).first();
+            if (result != null) {
+                return result.getList("postings", Document.class);
+            }
+        } catch (MongoException e) {
+            System.err.println("Error retrieving document ID: " + e.getMessage());
+            e.printStackTrace();
+
+        }
+        return new ArrayList<>();
+
     }
 
     // Optional: Close the connection
