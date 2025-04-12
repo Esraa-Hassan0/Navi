@@ -3,6 +3,7 @@ package com.searchengine.dbmanager;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -108,7 +109,7 @@ public class DBManager {
     public int getDF(String word) {
         try {
             Document filter = new Document("word", word);
-            Document doc = invertedIndexerCollection.find(filter).first();
+            Document doc = invertedIndexCollection.find(filter).first();
 
             List<?> array = doc.getList("postings", Object.class);
             int length = array.size();
@@ -131,7 +132,7 @@ public class DBManager {
                     Aggregates.match(Filters.eq("postings.positions.type", field)));
 
             // Get the AggregateIterable
-            AggregateIterable<Document> aggregateIterable = invertedIndexerCollection.aggregate(pipeline);
+            AggregateIterable<Document> aggregateIterable = invertedIndexCollection.aggregate(pipeline);
 
             // Count the results by iterating
             int length = 0;
@@ -154,7 +155,7 @@ public class DBManager {
                 Aggregates.match(Filters.eq("postings.positions.type", field)),
                 Aggregates.count("totalCount"));
 
-        Document result = invertedIndexerCollection.aggregate(pipeline).first();
+        Document result = invertedIndexCollection.aggregate(pipeline).first();
         double count = result != null ? result.getInteger("totalCount") : 0L;
 
         return count / getDocumentsCount();
@@ -184,16 +185,17 @@ public class DBManager {
 
             // Create a posting document for each Token
             for (Posting posting : token.getPostings()) {
+                Map<String, Integer> typesMap = posting.getTypeCounts();
                 Document postingDoc = new Document()
                         .append("docID", posting.getDocID())
-                        .append("TF", posting.getTF());
+                        .append("TF", posting.getTF()).append("types", typesMap);
 
                 postingsList.add(postingDoc);
             }
 
-            Document indexDoc = new Document().append("word", word).append("postingsList", postingsList);
+            Document indexDoc = new Document().append("word", word).append("postings", postingsList);
             cnt++;
-            if (cnt < 10)
+            if (cnt < 5)
                 invertedIndexCollection.insertOne(indexDoc);
             else
                 break;

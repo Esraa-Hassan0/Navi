@@ -62,14 +62,19 @@ public class Main {
             Token token = invertedIndex.get(word);
             for (Posting posting : token.getPostings()) {
                 System.out.print("Word: " + word + " -> DocId: " +
-                        posting.getDocID() + ", TF: " + posting.getTF() + ", Positions: [");
+                        posting.getDocID() + ", TF: " + posting.getTF() + ", Types: [");
                 // Print all positions
-                for (int i = 0; i < posting.getPos().size(); i++) {
-                    Position pos = posting.getPos().get(i);
-                    System.out.print("Pos: " + pos.getPos() + " (Type: " + pos.getType() + ")");
-                    if (i < posting.getPos().size() - 1) {
-                        System.out.print(", ");
+                int i = 0;
+
+                for (String type : posting.getTypeCounts().keySet()) {
+                    int count = posting.getTypeCounts().get(type);
+
+                    System.out.print("{type: " + type + " ,count: " + count + "}");
+                    if (i < posting.getTypeCounts().size() - 1) {
+                        System.out.print(",");
+
                     }
+                    i++;
                 }
                 System.out.println("]");
             }
