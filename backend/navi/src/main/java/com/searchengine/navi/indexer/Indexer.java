@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.jsoup.Jsoup;
@@ -54,7 +55,6 @@ public class Indexer {
             return postings;
         }
     }
-    // TO_BE_Continue
 
     public HashMap<String, Token> tokenizeDocument(Document doc) {
         HashMap<String, Token> tokenMap = new HashMap<>();
@@ -70,21 +70,21 @@ public class Indexer {
         Elements h2Tags = doc.select("h2");
         Elements anchorTags = doc.select("a[href]");
 
-        // System.out.println(PURPLE + "H1 Tags: " + h1Tags.text() + RESET);
-        // tokenizeText(h1Tags.text(), tokenMap, docId, "h1");
+        System.out.println(PURPLE + "H1 Tags: " + h1Tags.text() + RESET);
+        tokenizeText(h1Tags.text(), tokenMap, docId, "h1");
 
-        // System.out.println(PURPLE + "H2 Tags: " + h2Tags.text() + RESET);
-        // tokenizeText(h2Tags.text(), tokenMap, docId, "h2");
+        System.out.println(PURPLE + "H2 Tags: " + h2Tags.text() + RESET);
+        tokenizeText(h2Tags.text(), tokenMap, docId, "h2");
 
-        // System.out.println(PURPLE + "Anchor Tags: " + anchorTags.text() + RESET);
-        // tokenizeText(anchorTags.text(), tokenMap, docId, "a");
+        System.out.println(PURPLE + "Anchor Tags: " + anchorTags.text() + RESET);
+        tokenizeText(anchorTags.text(), tokenMap, docId, "a");
 
         tokenizeText(text, tokenMap, docId, "other");
         return tokenMap;
     }
 
     public void tokenizeText(String text, HashMap<String, Token> tokenMap, int docId, String type) {
-        String restructureText = text.toLowerCase().replaceAll("[^a-zA-Z\\s]", "");
+        String restructureText = text.toLowerCase().replaceAll("[^a-zA-Z0-9\\s]", "");
         String[] arrList = restructureText.split("\\s+");
         System.out.println(TEAL + "Tokens before filtering (" + type + "): " + Arrays.toString(arrList) + RESET);
         int counter = 0;
@@ -110,7 +110,7 @@ public class Indexer {
                     posting = new Posting(docId);
                     token.addPostings(posting);
                 }
-                posting.addPosition(new Position(type, counter));
+                posting.addPosition(type);
             }
         }
     }
@@ -146,18 +146,19 @@ public class Indexer {
             } else {
                 for (String word : tokenMap.keySet()) {
                     Token token = tokenMap.get(word);
-                    Posting posting = token.getPostings().get(0); // One posting per doc
+                    Posting posting = token.getPostings().get(0);
                     System.out.print(GREEN + "Word: " + word + RESET + " ->   DocId: " +
-                            posting.getDocID() + ", TF: " + posting.getTF() + ", Positions: [");
-                    // Print all positions
-                    for (int i = 0; i < posting.getPos().size(); i++) {
-                        Position pos = posting.getPos().get(i);
-                        System.out.print("Pos: " + pos.getPos() + " (Type: " + pos.getType() + ")");
-                        if (i < posting.getPos().size() - 1) {
+                            posting.getDocID() + ", TF: " + posting.getTF() + ", Types: {");
+                    Map<String, Integer> typeMap = posting.getTypeCounts();
+                    int i = 0;
+                    for (Map.Entry<String, Integer> entry : typeMap.entrySet()) {
+                        System.out.print(entry.getKey() + ": " + entry.getValue());
+                        if (i < typeMap.size() - 1) {
                             System.out.print(", ");
                         }
+                        i++;
                     }
-                    System.out.println("]");
+                    System.out.println("}");
                 }
             }
             indexer.close();
