@@ -30,6 +30,7 @@ public class Indexer {
 
     DBManager dbmanager;
     private HashSet<String> stopWords;
+    HashMap<String, Token> tokenMap = new HashMap<>();
 
     public Indexer() {
         dbmanager = new DBManager();
@@ -56,8 +57,7 @@ public class Indexer {
     }
     // TO_BE_Continue
 
-    public HashMap<String, Token> tokenizeDocument(Document doc) {
-        HashMap<String, Token> tokenMap = new HashMap<>();
+    public HashMap<String, Token> tokenizeDocument(Document doc, HashMap<String, Token> tokenMap) {
         String url = doc.location();
         int docId = dbmanager.retrieveDocID(url);
         String text = doc.text();
@@ -145,7 +145,8 @@ public class Indexer {
         try {
             Document doc = Jsoup.connect("https://toolsfairy.com/code-test/sample-html-files#").get();
             Indexer indexer = new Indexer();
-            HashMap<String, Token> tokenMap = indexer.tokenizeDocument(doc);
+            HashMap<String, Token> tokenMap = new HashMap<>();
+            tokenMap = indexer.tokenizeDocument(doc, tokenMap);
 
             System.out.println(GREEN + "Tokenized Words:" + RESET);
             if (tokenMap.isEmpty()) {
