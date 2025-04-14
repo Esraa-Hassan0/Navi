@@ -32,12 +32,33 @@ public class Ranker {
         }
     }
 
-    void BM25() {
-        int size = terms.size();
-        HashMap<Integer, ArrayList<Double>> docFieldLength;
-        for (int i = 0; i < size; i++) {
-            // get the docs ids from array of postings
-            // for each doc: calculate TF and docfieldlength
+    void BM25F() {
+        HashMap<Integer, ArrayList<Double>> docFieldLength = new HashMap<>();
+
+        // Loop over query terms
+        for (String term : terms) {
+
+            // Get postings of the term
+            List<Document> postings = dbManager.getWordPostings(term);
+
+            // Loop over each posting
+            for (Document posting : postings) {
+                int docId = posting.getInteger("docId");
+                commonDocs.add(docId);
+
+                // Loop over fields
+                for (int i = 0; i < 4; i++) {
+                    if (!docFieldLength.containsKey(docId) || docFieldLength.get(docId) == null) {
+                        double length = dbManager.getFieldLengthPerDoc(docId, fields[i]);
+                        docFieldLength.get(docId).add(length);
+                    }
+                    int TF = posting.getInteger(docFieldLength, i);
+
+                    double score = calculateBM25FByTerm(term, docId);
+                    scores.put(docId, scores.getOrDefault(docId, 0.0) + score);
+                }
+            }
+
         }
     }
 
@@ -71,11 +92,13 @@ public class Ranker {
     public static void main(String args[]) {
         Ranker r = new Ranker();
 
-        String searchWord = "blah";
-        List<Document> postings = dbManager.getWordPostings(searchWord);
-
-        System.out.println("DocIds and TFs for '" + searchWord + "':");
-        postings.forEach(posting -> System.out.println("docId: " + posting.getInteger("docId") +
-                ", TF: " + posting.getInteger("TF")));
+        double count = dbManager.getAvgFieldLength("h1");
+        double count2 = dbManager.getAvgFieldLength("h2");
+        double count3 = dbManager.getAvgFieldLength("a");
+        double count4 = dbManager.getAvgFieldLength("other");
+        System.out.println("count h1: " + count);
+        System.out.println("count h2: " + count2);
+        System.out.println("count a: " + count3);
+        System.out.println("count other: " + count4);
     }
 }
