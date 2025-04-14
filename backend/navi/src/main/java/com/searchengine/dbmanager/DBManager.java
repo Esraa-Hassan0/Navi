@@ -175,7 +175,6 @@ public class DBManager {
 
         }
         return new ArrayList<>();
-
     }
 
     // Optional: Close the connection

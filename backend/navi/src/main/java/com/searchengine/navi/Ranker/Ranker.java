@@ -5,6 +5,9 @@ import java.lang.Math;
 import com.searchengine.dbmanager.DBManager;
 
 import org.bson.Document;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 
 public class Ranker {
     private double k = 1.5, b = 0.75;
@@ -69,7 +72,6 @@ public class Ranker {
             // result += weight[i] * IDF * (TF * (k + 1) / (TF + k + (1 - b + b * (docLength
             // / avgDocFieldsLengths[i]))));
         }
-
         return result;
     }
 
