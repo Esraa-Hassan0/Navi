@@ -1,4 +1,5 @@
 package com.searchengine.navi.queryengine;
+// package com.searchengine.backend.queryengine;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -10,17 +11,22 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.regex.Pattern;
-
+import org.jsoup.Jsoup;
+import org.springframework.web.bind.annotation.*;
+import opennlp.tools.stemmer.PorterStemmer;
 import com.searchengine.dbmanager.DBManager;
-
 import java.util.regex.Matcher;
 
-import opennlp.tools.stemmer.PorterStemmer;
-
+@RestController
+@RequestMapping("/")
+@CrossOrigin(origins = "*") // Allow React app to connect
 public class QueryEngine {
 
     private HashSet<String> stopWords;
-    private DBManager;
+    private DBManager dbManager;
+    private List<String> tokens = new ArrayList<>(); // Store parsed tokens for snippet generation
+    int resultCount = 0; // Counter for the number of results found
+    int suggestionCount = 0; // Counter for the number of suggestions found
 
     public static class Phrase {
         private List<String> words;
@@ -38,17 +44,17 @@ public class QueryEngine {
         public boolean isQuoted() {
             return isQuoted;
         }
-
-        @Override
-        public String toString() {
-            return (isQuoted ? "\"" : "") + words + (isQuoted ? "\"" : "");
-        }
     }
 
     public QueryEngine() {
         addStopWords();
-        DBManager = new DBManager();
-        
+        dbManager = new DBManager();
+
+    }
+
+    @GetMapping("/")
+    public String index() {
+        return "Query Engine is running!";
     }
 
     public List<Object> parseQuery(String query) {
@@ -61,7 +67,7 @@ public class QueryEngine {
         query = query.trim().toLowerCase();
 
         // Split query into tokens (phrases and operators)
-        List<String> tokens = tokenizeQuery(query);
+        tokens = tokenizeQuery(query);
         if (tokens == null) {
             System.out.println("Invalid query: Unmatched quotes or malformed input");
             return new ArrayList<>();
@@ -216,14 +222,8 @@ public class QueryEngine {
         }
     }
 
-    public String getSnippet(List<Object> tokens) {
-        if (tokens == null || tokens.isEmpty()) {
-            return "No relevant snippet available.";
-        }
-
-        if (dbConnection == null) {
-            return "Database connection unavailable.";
-        }
+    public String getSnippet(String docURL) {
+        String content = Jsoup.parse(docURL).text(); // Assuming docID is a URL or HTML content
 
         // Collect query terms for matching
         List<String> allWords = new ArrayList<>();
@@ -249,60 +249,7 @@ public class QueryEngine {
 
         // Remove duplicates
         List<String> uniqueWords = new ArrayList<>(new HashSet<>(allWords));
-
-        // Build SQL query to find matching documents
-        try {
-            // Construct WHERE clause for individual words and quoted phrases
-            List<String> conditions = new ArrayList<>();
-            List<String> params = new ArrayList<>();
-
-            // Match individual words (unquoted)
-            for (String word : uniqueWords) {
-                conditions.add("LOWER(content) LIKE ?");
-                params.add("%" + word + "%");
-            }
-
-            // Match quoted phrases (must appear consecutively)
-            for (List<String> phrase : quotedPhrases) {
-                StringBuilder phrasePattern = new StringBuilder();
-                for (int i = 0; i < phrase.size(); i++) {
-                    phrasePattern.append(phrase.get(i));
-                    if (i < phrase.size() - 1) {
-                        phrasePattern.append("\\s+");
-                    }
-                }
-                conditions.add("LOWER(content) REGEXP ?");
-                params.add(phrasePattern.toString());
-            }
-
-            // Exclude NOT terms
-            for (String notWord : notWords) {
-                conditions.add("LOWER(content) NOT LIKE ?");
-                params.add("%" + notWord + "%");
-            }
-
-            String sql = "SELECT content FROM documents";
-            if (!conditions.isEmpty()) {
-                sql += " WHERE " + String.join(" AND ", conditions);
-            }
-            sql += " LIMIT 1"; // Get the first matching document
-
-            PreparedStatement stmt = dbConnection.prepareStatement(sql);
-            for (int i = 0; i < params.size(); i++) {
-                stmt.setString(i + 1, params.get(i));
-            }
-
-            ResultSet rs = stmt.executeQuery();
-            if (rs.next()) {
-                String content = rs.getString("content");
-                return generateSnippet(content, uniqueWords, quotedPhrases, notWords);
-            } else {
-                return "No matching documents found.";
-            }
-        } catch (SQLException e) {
-            System.err.println("Error querying database: " + e.getMessage());
-            return "Error retrieving snippet.";
-        }
+        return generateSnippet(content, uniqueWords, quotedPhrases, notWords);
     }
 
     private String generateSnippet(String content, List<String> uniqueWords, List<List<String>> quotedPhrases,

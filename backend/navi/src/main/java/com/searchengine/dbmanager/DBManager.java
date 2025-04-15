@@ -203,6 +203,9 @@ public class DBManager {
         }
     }
 
+    public void getDocContentBy(String url, int id) {
+      
+    }
     // Optional: Close the connection
     public void close() {
         if (mongoClient != null) {
