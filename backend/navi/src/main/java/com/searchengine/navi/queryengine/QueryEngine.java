@@ -3,17 +3,52 @@ package com.searchengine.navi.queryengine;
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.regex.Pattern;
+
+import com.searchengine.dbmanager.DBManager;
+
+import java.util.regex.Matcher;
+
 import opennlp.tools.stemmer.PorterStemmer;
 
 public class QueryEngine {
 
     private HashSet<String> stopWords;
+    private DBManager;
+
+    public static class Phrase {
+        private List<String> words;
+        private boolean isQuoted;
+
+        public Phrase(List<String> words, boolean isQuoted) {
+            this.words = words;
+            this.isQuoted = isQuoted;
+        }
+
+        public List<String> getWords() {
+            return words;
+        }
+
+        public boolean isQuoted() {
+            return isQuoted;
+        }
+
+        @Override
+        public String toString() {
+            return (isQuoted ? "\"" : "") + words + (isQuoted ? "\"" : "");
+        }
+    }
 
     public QueryEngine() {
         addStopWords();
+        DBManager = new DBManager();
+        
     }
 
     public List<Object> parseQuery(String query) {
@@ -34,8 +69,7 @@ public class QueryEngine {
 
         // Process tokens
         int operatorCount = 0;
-        List<String> currentPhrase = null;
-        boolean expectPhrase = true;
+        boolean expectPhrase = true; // Start by expecting a phrase
 
         for (int i = 0; i < tokens.size(); i++) {
             String token = tokens.get(i);
@@ -45,16 +79,24 @@ public class QueryEngine {
                     System.out.println("Invalid query: Unexpected operator at position " + i);
                     return new ArrayList<>();
                 }
-                currentPhrase = processPhrase(token, stemmer);
-                if (!currentPhrase.isEmpty()) {
-                    result.add(currentPhrase);
+
+                // Process phrase (quoted or unquoted)
+                boolean isQuoted = token.startsWith("\"") && token.endsWith("\"");
+                if (isQuoted) {
+                    // Remove quotes for processing
+                    token = token.substring(1, token.length() - 1);
+                }
+                List<String> words = processPhrase(token, stemmer);
+                if (!words.isEmpty()) {
+                    result.add(new Phrase(words, isQuoted));
                 } else if (result.isEmpty()) {
+                    // If the first phrase is empty (all stop words), return empty
                     return new ArrayList<>();
                 }
                 expectPhrase = false;
 
             } else {
-
+                // Expect an operator
                 if (!isOperator(token)) {
                     System.out.println("Invalid query: Expected operator, found " + token);
                     return new ArrayList<>();
@@ -64,6 +106,7 @@ public class QueryEngine {
                 operatorCount++;
                 expectPhrase = true;
 
+                // Check operator limit
                 if (operatorCount > 2) {
                     System.out.println("Invalid query: Maximum of two operations allowed");
                     return new ArrayList<>();
@@ -92,15 +135,22 @@ public class QueryEngine {
             if (c == '"') {
                 if (inQuotes) {
                     // End of quoted phrase
+                    token.append(c);
                     tokens.add(token.toString());
                     token.setLength(0);
                     inQuotes = false;
                 } else {
                     // Start of quoted phrase
+                    if (token.length() > 0) {
+                        tokens.add(token.toString());
+                        token.setLength(0);
+                    }
+                    token.append(c);
                     inQuotes = true;
                 }
                 i++;
             } else if (inQuotes) {
+                // Collect characters inside quotes
                 token.append(c);
                 i++;
             } else if (Character.isWhitespace(c)) {
@@ -111,6 +161,7 @@ public class QueryEngine {
                 }
                 i++;
             } else {
+                // Collect characters for unquoted tokens
                 token.append(c);
                 i++;
             }
@@ -155,7 +206,7 @@ public class QueryEngine {
 
     private void addStopWords() {
         stopWords = new HashSet<>();
-        try (BufferedReader scanner = new BufferedReader(new FileReader("./stopwords.txt"))) {
+        try (BufferedReader scanner = new BufferedReader(new FileReader("./Data/stopwords.txt"))) {
             String line;
             while ((line = scanner.readLine()) != null) {
                 stopWords.add(line.trim().toLowerCase());
@@ -165,39 +216,165 @@ public class QueryEngine {
         }
     }
 
+    public String getSnippet(List<Object> tokens) {
+        if (tokens == null || tokens.isEmpty()) {
+            return "No relevant snippet available.";
+        }
+
+        if (dbConnection == null) {
+            return "Database connection unavailable.";
+        }
+
+        // Collect query terms for matching
+        List<String> allWords = new ArrayList<>();
+        List<List<String>> quotedPhrases = new ArrayList<>();
+        List<String> notWords = new ArrayList<>();
+
+        for (int i = 0; i < tokens.size(); i++) {
+            Object element = tokens.get(i);
+            if (element instanceof Phrase) {
+                Phrase phrase = (Phrase) element;
+                List<String> words = phrase.getWords();
+                if (i > 0 && tokens.get(i - 1).equals("NOT")) {
+                    notWords.addAll(words);
+                } else {
+                    if (phrase.isQuoted()) {
+                        quotedPhrases.add(words);
+                    } else {
+                        allWords.addAll(words);
+                    }
+                }
+            }
+        }
+
+        // Remove duplicates
+        List<String> uniqueWords = new ArrayList<>(new HashSet<>(allWords));
+
+        // Build SQL query to find matching documents
+        try {
+            // Construct WHERE clause for individual words and quoted phrases
+            List<String> conditions = new ArrayList<>();
+            List<String> params = new ArrayList<>();
+
+            // Match individual words (unquoted)
+            for (String word : uniqueWords) {
+                conditions.add("LOWER(content) LIKE ?");
+                params.add("%" + word + "%");
+            }
+
+            // Match quoted phrases (must appear consecutively)
+            for (List<String> phrase : quotedPhrases) {
+                StringBuilder phrasePattern = new StringBuilder();
+                for (int i = 0; i < phrase.size(); i++) {
+                    phrasePattern.append(phrase.get(i));
+                    if (i < phrase.size() - 1) {
+                        phrasePattern.append("\\s+");
+                    }
+                }
+                conditions.add("LOWER(content) REGEXP ?");
+                params.add(phrasePattern.toString());
+            }
+
+            // Exclude NOT terms
+            for (String notWord : notWords) {
+                conditions.add("LOWER(content) NOT LIKE ?");
+                params.add("%" + notWord + "%");
+            }
+
+            String sql = "SELECT content FROM documents";
+            if (!conditions.isEmpty()) {
+                sql += " WHERE " + String.join(" AND ", conditions);
+            }
+            sql += " LIMIT 1"; // Get the first matching document
+
+            PreparedStatement stmt = dbConnection.prepareStatement(sql);
+            for (int i = 0; i < params.size(); i++) {
+                stmt.setString(i + 1, params.get(i));
+            }
+
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                String content = rs.getString("content");
+                return generateSnippet(content, uniqueWords, quotedPhrases, notWords);
+            } else {
+                return "No matching documents found.";
+            }
+        } catch (SQLException e) {
+            System.err.println("Error querying database: " + e.getMessage());
+            return "Error retrieving snippet.";
+        }
+    }
+
+    private String generateSnippet(String content, List<String> uniqueWords, List<List<String>> quotedPhrases,
+            List<String> notWords) {
+        StringBuilder snippet = new StringBuilder("... ");
+        String contentLower = content.toLowerCase();
+
+        // Highlight quoted phrases first
+        for (List<String> phrase : quotedPhrases) {
+            StringBuilder phraseText = new StringBuilder();
+            for (int i = 0; i < phrase.size(); i++) {
+                phraseText.append(phrase.get(i));
+                if (i < phrase.size() - 1) {
+                    phraseText.append("\\s+");
+                }
+            }
+            Pattern pattern = Pattern.compile(phraseText.toString(), Pattern.CASE_INSENSITIVE);
+            Matcher matcher = pattern.matcher(contentLower);
+            if (matcher.find()) {
+                int start = Math.max(0, matcher.start() - 20);
+                int end = Math.min(content.length(), matcher.end() + 20);
+                String excerpt = content.substring(start, end);
+                // Highlight the phrase
+                String phraseStr = content.substring(matcher.start(), matcher.end());
+                excerpt = excerpt.replaceAll("(?i)" + phraseText, "**" + phraseStr + "**");
+                snippet.append(excerpt).append(" ... ");
+                return snippet.toString();
+            }
+        }
+
+        // Highlight individual words
+        for (String word : uniqueWords) {
+            Pattern pattern = Pattern.compile("\\b" + word + "\\b", Pattern.CASE_INSENSITIVE);
+            Matcher matcher = pattern.matcher(contentLower);
+            if (matcher.find()) {
+                int start = Math.max(0, matcher.start() - 20);
+                int end = Math.min(content.length(), matcher.end() + 20);
+                String excerpt = content.substring(start, end);
+                // Highlight the word
+                excerpt = excerpt.replaceAll("(?i)\\b" + word + "\\b", "**" + word + "**");
+                snippet.append(excerpt).append(" ... ");
+                return snippet.toString();
+            }
+        }
+
+        // If no matches, return a default portion of the content
+        int end = Math.min(50, content.length());
+        snippet.append(content.substring(0, end)).append(" ... ");
+        return snippet.toString();
+    }
+
+    private void getSuggesstions() {
+
+    }
+
+    private void getResults() {
+
+    }
+
+    // For testing
     public static void main(String[] args) {
         QueryEngine engine = new QueryEngine();
-        List<Object> result;
-
-        // Valid queries
-        result = engine.parseQuery("\"Football player\" OR \"Tennis player\"");
-        System.out.println(result);
-        // Output: [[footbal, player], OR, [tenni, player]]
-
-        result = engine.parseQuery("\"Football player\" AND \"Tennis player\" NOT \"Soccer star\"");
-        System.out.println(result);
-        // Output: [[footbal, player], AND, [tenni, player], NOT, [soccer, star]]
-
-        result = engine.parseQuery("\"Football player\"");
-        System.out.println(result);
-        // Output: [[footbal, player]]
-
-        // Invalid queries
-        result = engine
-                .parseQuery("\"Football player\" AND \"Tennis player\" OR \"Soccer star\" NOT \"Basketball star\"");
-        // Output: Invalid query: Maximum of two operations allowed
-        // Returns: []
-
-        result = engine.parseQuery("\"Football player\" AND");
-        // Output: Invalid query: Query ends with an operator
-        // Returns: []
-
-        result = engine.parseQuery("\"Football player\" \"Tennis player\"");
-        // Output: Invalid query: Expected operator, found Tennis player
-        // Returns: []
-
-        result = engine.parseQuery("\"Football player");
-        // Output: Invalid query: Unmatched quotes or malformed input
-        // Returns: []
+        String[] queries = {
+                "\"Football player scores\"",
+                "Football player scores",
+                "\"Football player\" OR \"Tennis player\"",
+                "\"Football player\" AND \"Cricket star\" NOT \"Soccer star\""
+        };
+        for (String query : queries) {
+            System.out.println("Query: " + query);
+            System.out.println("Parsed: " + engine.parseQuery(query));
+            System.out.println();
+        }
     }
 }
