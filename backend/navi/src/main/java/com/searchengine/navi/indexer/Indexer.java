@@ -31,6 +31,7 @@ public class Indexer {
 
     DBManager dbmanager;
     private HashSet<String> stopWords;
+    HashMap<String, Token> tokenMap = new HashMap<>();
 
     public Indexer() {
         dbmanager = new DBManager();
@@ -56,8 +57,7 @@ public class Indexer {
         }
     }
 
-    public HashMap<String, Token> tokenizeDocument(Document doc) {
-        HashMap<String, Token> tokenMap = new HashMap<>();
+    public HashMap<String, Token> tokenizeDocument(Document doc, HashMap<String, Token> tokenMap) {
         String url = doc.location();
         int docId = dbmanager.retrieveDocID(url);
         String text = doc.text();
@@ -89,9 +89,15 @@ public class Indexer {
         System.out.println(TEAL + "Tokens before filtering (" + type + "): " + Arrays.toString(arrList) + RESET);
         int counter = 0;
 
+        Stemmer languageStemmer = new Stemmer();
+
         for (String s : arrList) {
             // to be stemmed
             String tokenStr = s.trim();
+            System.out.println(GREEN + "===========BEFORE STEMMING===========\n" + PURPLE + tokenStr + RESET);
+            tokenStr = languageStemmer.stemWord(tokenStr);
+            System.out.println(GREEN + "===========AFTER STEMMING============\n" + YELLOW + tokenStr + RESET);
+
             if (!tokenStr.isEmpty() && !stopWords.contains(tokenStr)) {
                 counter++;
                 Token token = tokenMap.get(tokenStr);
@@ -134,11 +140,13 @@ public class Indexer {
     }
 
     public static void main(String[] args) {
+
         System.out.println(GREEN + "Starting tokenization..." + RESET);
         try {
             Document doc = Jsoup.connect("https://toolsfairy.com/code-test/sample-html-files#").get();
             Indexer indexer = new Indexer();
-            HashMap<String, Token> tokenMap = indexer.tokenizeDocument(doc);
+            HashMap<String, Token> tokenMap = new HashMap<>();
+            tokenMap = indexer.tokenizeDocument(doc, tokenMap);
 
             System.out.println(GREEN + "Tokenized Words:" + RESET);
             if (tokenMap.isEmpty()) {
