@@ -1,13 +1,14 @@
-import './App.css'
+import "./App.css";
+import ResultPage from "./pages/ResultPage/ResultPage";
+import SearchPage from "./pages/SearchPage/SearchPage.jsx";
 
 function App() {
-
-
   return (
     <>
-      <h1>React App</h1>
+    <SearchPage />
+    {/* <ResultPage /> */}
     </>
-  )
+  );
 }
 
-export default App
+export default App;
