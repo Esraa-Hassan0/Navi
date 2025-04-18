@@ -1,6 +1,9 @@
 package com.searchengine.dbmanager;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -23,11 +26,14 @@ import com.mongodb.client.model.Aggregates;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Projections;
 import org.bson.conversions.Bson;
+import com.searchengine.navi.indexer.Indexer.Token;
+import com.searchengine.navi.indexer.Posting;
 
 public class DBManager {
     private MongoClient mongoClient;
     private MongoDatabase DB;
-    private MongoCollection<Document> invertedIndexerCollection; // Fixed typo
+    // I changed it to invertedIndex instead of invertedIndexer
+    private MongoCollection<Document> invertedIndexCollection; // Fixed typo
     private MongoCollection<Document> docCollection;
 
     public DBManager() {
@@ -46,7 +52,7 @@ public class DBManager {
             try {
                 mongoClient = MongoClients.create(settings);
                 DB = mongoClient.getDatabase("navi");
-                invertedIndexerCollection = DB.getCollection("inverted index"); // Fixed typo
+                invertedIndexCollection = DB.getCollection("inverted index"); // Fixed typo
                 docCollection = DB.getCollection("doc");
 
                 System.out.println("✅ Successfully connected to MongoDB!\n\n\n");
@@ -103,7 +109,7 @@ public class DBManager {
     public int getDF(String word) {
         try {
             Document filter = new Document("word", word);
-            Document doc = invertedIndexerCollection.find(filter).first();
+            Document doc = invertedIndexCollection.find(filter).first();
 
             List<?> array = doc.getList("postings", Object.class);
             int length = array.size();
@@ -126,7 +132,7 @@ public class DBManager {
                     Aggregates.match(Filters.eq("postings.positions.type", field)));
 
             // Get the AggregateIterable
-            AggregateIterable<Document> aggregateIterable = invertedIndexerCollection.aggregate(pipeline);
+            AggregateIterable<Document> aggregateIterable = invertedIndexCollection.aggregate(pipeline);
 
             // Count the results by iterating
             int length = 0;
@@ -149,10 +155,52 @@ public class DBManager {
                 Aggregates.match(Filters.eq("postings.positions.type", field)),
                 Aggregates.count("totalCount"));
 
-        Document result = invertedIndexerCollection.aggregate(pipeline).first();
+        Document result = invertedIndexCollection.aggregate(pipeline).first();
         double count = result != null ? result.getInteger("totalCount") : 0L;
 
         return count / getDocumentsCount();
+    }
+
+    // Retrieve all URLS in our db
+
+    public ArrayList<Document> retriveURLs() {
+        ArrayList<Document> urls = docCollection.find().projection(new Document("url", 1).append("_id", 0))
+                .into(new ArrayList<>());
+
+        return urls;
+    }
+
+    // Insert Inverted Index to the db
+
+    // For now it is limited to 10 docs till we finalize our structure
+
+    public void insertIntoInvertedIndex(HashMap<String, Token> invertedIndex)
+
+    {
+        int cnt = 0;
+
+        for (String word : invertedIndex.keySet()) {
+            Token token = invertedIndex.get(word);
+            ArrayList<Document> postingsList = new ArrayList<>();
+
+            // Create a posting document for each Token
+            for (Posting posting : token.getPostings()) {
+                Map<String, Integer> typesMap = posting.getTypeCounts();
+                Document postingDoc = new Document()
+                        .append("docID", posting.getDocID())
+                        .append("TF", posting.getTF()).append("types", typesMap);
+
+                postingsList.add(postingDoc);
+            }
+
+            Document indexDoc = new Document().append("word", word).append("postings", postingsList);
+            cnt++;
+            if (cnt < 5)
+                invertedIndexCollection.insertOne(indexDoc);
+            else
+                break;
+
+        }
     }
 
     // Optional: Close the connection
