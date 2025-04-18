@@ -124,9 +124,9 @@ public class DBManager {
         try {
             List<Bson> pipeline = Arrays.asList(
                     Aggregates.match(Filters.elemMatch("postings",
-                            Filters.eq("docId", docId))),
+                            Filters.eq("docID", docId))),
                     Aggregates.unwind("$postings"),
-                    Aggregates.match(Filters.eq("postings.docId", docId)),
+                    Aggregates.match(Filters.eq("postings.docID", docId)),
                     Aggregates.group(null,
                             Accumulators.sum("total", "$postings.types." + field)));
 
@@ -162,7 +162,7 @@ public class DBManager {
             List<Bson> pipeline = Arrays.asList(
                     Aggregates.match(Filters.eq("word", word)),
                     Aggregates.project(Projections.fields(
-                            Projections.include("postings.docId", "postings.types"),
+                            Projections.include("postings.docID", "postings.types"),
                             Projections.excludeId())));
 
             Document result = invertedIndexerCollection.aggregate(pipeline).first();
