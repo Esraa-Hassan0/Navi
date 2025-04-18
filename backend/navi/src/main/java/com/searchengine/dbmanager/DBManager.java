@@ -12,6 +12,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -33,9 +34,12 @@ import com.mongodb.client.model.Accumulators;
 import com.mongodb.client.model.Aggregates;
 import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Projections;
+import com.mongodb.client.model.Field;
 import org.bson.conversions.Bson;
 import com.searchengine.navi.indexer.Indexer.Token;
 import com.searchengine.navi.indexer.Posting;
+import static com.mongodb.client.model.Aggregates.*;
+import static com.mongodb.client.model.Accumulators.*;
 
 public class DBManager {
     private static final Logger logger = LoggerFactory.getLogger(DBManager.class);
@@ -136,22 +140,26 @@ public class DBManager {
     public int getFieldLengthPerDoc(int docId, String field) {
         try {
             List<Bson> pipeline = Arrays.asList(
-                    Aggregates.match(Filters.eq("postings.docId", docId)),
+                    Aggregates.match(Filters.elemMatch("postings",
+                            Filters.eq("docID", docId))),
                     Aggregates.unwind("$postings"),
-                    Aggregates.match(Filters.eq("postings.docId", docId)),
-                    Aggregates.unwind("$postings.positions"),
-                    Aggregates.match(Filters.eq("postings.positions.type", field)));
+                    Aggregates.match(Filters.eq("postings.docID", docId)),
+                    Aggregates.group(null,
+                            Accumulators.sum("total", "$postings.types." + field)));
 
             // Get the AggregateIterable
-            AggregateIterable<Document> aggregateIterable = invertedIndexCollection.aggregate(pipeline);
+            // AggregateIterable<Document> aggregateIterable =
+            // invertedIndexCollection.aggregate(pipeline);
 
             // Count the results by iterating
-            int length = 0;
-            for (Document doc : aggregateIterable) {
-                length++;
-            }
+            // int length = 0;
+            // for (Document doc : aggregateIterable) {
+            // length++;
+            // }
 
-            return length;
+            // return length;
+            Document result = invertedIndexCollection.aggregate(pipeline).first();
+            return result != null ? result.getInteger("total", 0) : 0;
         } catch (MongoException e) {
             System.err.println("Error retrieving document ID: " + e.getMessage());
             e.printStackTrace();
@@ -160,16 +168,43 @@ public class DBManager {
     }
 
     public double getAvgFieldLength(String field) {
-        List<Bson> pipeline = Arrays.asList(
-                Aggregates.unwind("$postings"),
-                Aggregates.unwind("$postings.positions"),
-                Aggregates.match(Filters.eq("postings.positions.type", field)),
-                Aggregates.count("totalCount"));
+        try {
+            AggregateIterable<Document> result = invertedIndexCollection.aggregate(Arrays.asList(
+                    unwind("$postings"),
+                    group(null, sum("total", "$postings.types." + field))));
 
-        Document result = invertedIndexCollection.aggregate(pipeline).first();
-        double count = result != null ? result.getInteger("totalCount") : 0L;
+            // Document result = invertedIndexCollection.aggregate(pipeline).first();
+            // double count = result != null ? result.getInteger("totalCount") : 0L;
+            Document doc = result.first();
+            int count = doc != null ? doc.getInteger("total", 0) : 0;
 
-        return count / getDocumentsCount();
+            return count / getDocumentsCount();
+
+        } catch (MongoException e) {
+            System.err.println("Error retrieving document ID: " + e.getMessage());
+            e.printStackTrace();
+            return -1;
+        }
+    }
+
+    public List<Document> getWordPostings(String word) {
+        try {
+            List<Bson> pipeline = Arrays.asList(
+                    Aggregates.match(Filters.eq("word", word)),
+                    Aggregates.project(Projections.fields(
+                            Projections.include("postings.docID", "postings.types"),
+                            Projections.excludeId())));
+
+            Document result = invertedIndexerCollection.aggregate(pipeline).first();
+            if (result != null) {
+                return result.getList("postings", Document.class);
+            }
+        } catch (MongoException e) {
+            System.err.println("Error retrieving document ID: " + e.getMessage());
+            e.printStackTrace();
+
+        }
+        return new ArrayList<>();
     }
 
     // Retrieve all URLS in our db
