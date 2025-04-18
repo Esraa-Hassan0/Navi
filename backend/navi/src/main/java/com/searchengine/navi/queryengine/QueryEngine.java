@@ -8,18 +8,23 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+import org.bson.Document;
+import org.bson.types.ObjectId;
 import org.jsoup.Jsoup;
 import org.springframework.web.bind.annotation.*;
 import opennlp.tools.stemmer.PorterStemmer;
 import com.searchengine.dbmanager.DBManager;
 import java.util.regex.Matcher;
 
+@CrossOrigin(origins = "*", allowedHeaders = "*")
 @RestController
 @RequestMapping("/")
-@CrossOrigin(origins = "*") // Allow React app to connect
 public class QueryEngine {
 
     private HashSet<String> stopWords;
@@ -52,15 +57,17 @@ public class QueryEngine {
 
     }
 
-    @GetMapping("/")
+    @GetMapping("/home")
     public String index() {
         return "Query Engine is running!";
     }
 
-    public List<Object> parseQuery(String query) {
+    @PostMapping("/search")
+    public List<Object> parseQuery(@RequestParam("query") String query) {
         if (query == null || query.trim().isEmpty()) {
             return new ArrayList<>();
         }
+        dbManager.insertSuggestion(query);
 
         List<Object> result = new ArrayList<>();
         PorterStemmer stemmer = new PorterStemmer();
@@ -72,7 +79,14 @@ public class QueryEngine {
             System.out.println("Invalid query: Unmatched quotes or malformed input");
             return new ArrayList<>();
         }
-
+        boolean isQuoted = query.startsWith("\"") && query.endsWith("\"");
+        if (!isQuoted) {
+            // Not phrases, just words
+            return tokens.stream()
+                    .filter(token -> !stopWords.contains(token) && !token.isEmpty())
+                    .map(stemmer::stem)
+                    .collect(Collectors.toList());
+        }
         // Process tokens
         int operatorCount = 0;
         boolean expectPhrase = true; // Start by expecting a phrase
@@ -87,18 +101,15 @@ public class QueryEngine {
                 }
 
                 // Process phrase (quoted or unquoted)
-                boolean isQuoted = token.startsWith("\"") && token.endsWith("\"");
+                isQuoted = token.startsWith("\"") && token.endsWith("\"");
                 if (isQuoted) {
                     // Remove quotes for processing
                     token = token.substring(1, token.length() - 1);
                 }
-                List<String> words = processPhrase(token, stemmer);
-                if (!words.isEmpty()) {
-                    result.add(new Phrase(words, isQuoted));
-                } else if (result.isEmpty()) {
-                    // If the first phrase is empty (all stop words), return empty
-                    return new ArrayList<>();
-                }
+                String phrase = processPhrase(token, stemmer);
+
+                result.add(phrase);
+
                 expectPhrase = false;
 
             } else {
@@ -126,6 +137,8 @@ public class QueryEngine {
             return new ArrayList<>();
         }
 
+        System.out.println("Parsed query: " + result.stream().map(Object::toString).collect(Collectors.joining(" "))); // Debug
+                                                                                                                       // output
         return result;
     }
 
@@ -185,7 +198,7 @@ public class QueryEngine {
         return tokens;
     }
 
-    private List<String> processPhrase(String phrase, PorterStemmer stemmer) {
+    private String processPhrase(String phrase, PorterStemmer stemmer) {
         List<String> processed = new ArrayList<>();
         // Clean and split phrase
         String cleaned = phrase.replaceAll("[^a-z0-9\\s]", "");
@@ -200,8 +213,16 @@ public class QueryEngine {
                 }
             }
         }
-
-        return processed;
+        StringBuilder sb = new StringBuilder();
+        for (String word : processed) {
+            sb.append(word).append(" ");
+        }
+        // Remove trailing space
+        if (sb.length() > 0) {
+            sb.setLength(sb.length() - 1); // Remove last space
+        }
+        // Return the processed phrase as a single string
+        return sb.toString();
     }
 
     private boolean isOperator(String token) {
@@ -301,12 +322,18 @@ public class QueryEngine {
         return snippet.toString();
     }
 
-    private void getSuggesstions() {
-
+    @GetMapping("/suggestions")
+    public List<String> getSuggestions(@RequestParam("query") String query) {
+        List<String> suggestions = new ArrayList<>();
+        suggestions = dbManager.getSuggestions(query);
+        return suggestions;
     }
 
-    private void getResults() {
+    public List<Document> getResults(List<ObjectId> docs) {
 
+        // List<Document> results = dbManager.getDocuments(docs);
+        return null;
+        // // dbManager.g
     }
 
     // For testing

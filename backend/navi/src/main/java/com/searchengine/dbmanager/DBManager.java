@@ -1,11 +1,19 @@
 package com.searchengine.dbmanager;
 
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 
 import org.bson.Document;
@@ -30,11 +38,13 @@ import com.searchengine.navi.indexer.Indexer.Token;
 import com.searchengine.navi.indexer.Posting;
 
 public class DBManager {
+    private static final Logger logger = LoggerFactory.getLogger(DBManager.class);
     private MongoClient mongoClient;
     private MongoDatabase DB;
     // I changed it to invertedIndex instead of invertedIndexer
     private MongoCollection<Document> invertedIndexCollection; // Fixed typo
     private MongoCollection<Document> docCollection;
+    private MongoCollection<Document> queriesCollection;
 
     public DBManager() {
         if (mongoClient == null) { // Ensure only one connection is created
@@ -53,6 +63,7 @@ public class DBManager {
                 mongoClient = MongoClients.create(settings);
                 DB = mongoClient.getDatabase("navi");
                 invertedIndexCollection = DB.getCollection("inverted index"); // Fixed typo
+                queriesCollection = DB.getCollection("queries"); // Fixed typo
                 docCollection = DB.getCollection("doc");
 
                 System.out.println("✅ Successfully connected to MongoDB!\n\n\n");
@@ -204,13 +215,102 @@ public class DBManager {
     }
 
     public void getDocContentBy(String url, int id) {
-      
+
     }
+
+    private void insertSampleData() {
+        try {
+
+            // Insert the sample document
+            Document sampleDoc = new Document()
+                    .append("url", "https://toolsfairy.cot/sample-html-files#")
+                    .append("title", "Free Sample HTML Files for Download, Test Web Pages")
+                    .append("content", "Very Free Pages Online Tools Sampl…")
+                    .append("id", 67);
+
+            docCollection.insertOne(sampleDoc);
+            System.out.println("Sample document inserted successfully.");
+            sampleDoc = new Document()
+                    .append("url", "https://toofairy.cot/sample-html-files#")
+                    .append("title", "Free Sample HTML Files for Download, Test Web Pages")
+                    .append("content", "Very Free new Pages Online Tools Sampl…")
+                    .append("id", 68);
+
+            docCollection.insertOne(sampleDoc);
+            System.out.println("Sample document inserted successfully.");
+        } catch (MongoException e) {
+            System.err.println("Error inserting sample data: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    public void insertSuggestion(String query) {
+        if (query == null || query.trim().isEmpty()) {
+            logger.warn("Attempted to insert empty or null suggestion");
+            return;
+        }
+
+        String trimmedQuery = query.trim();
+        try {
+            // Check if the query already exists (case-insensitive match)
+            Document filter = new Document("query", trimmedQuery);
+            Document existingDoc = queriesCollection.find(filter).first();
+
+            if (existingDoc == null) {
+                // Query doesn't exist, insert it
+                Document doc = new Document("query", trimmedQuery);
+                queriesCollection.insertOne(doc);
+                logger.info("Successfully inserted suggestion: {}", trimmedQuery);
+            } else {
+                logger.debug("Suggestion already exists: {}", trimmedQuery);
+            }
+        } catch (MongoException e) {
+            logger.error("Error occurred while inserting suggestion '{}': {}", trimmedQuery, e.getMessage(), e);
+        }
+    }
+
+    public List<String> getSuggestions(String queryTerms) {
+        List<String> suggestions = new ArrayList<>();
+
+        // Input validation
+        if (queryTerms == null || queryTerms.trim().isEmpty()) {
+            System.err.println("Received empty or null query for suggestions");
+            return Collections.emptyList();
+        }
+
+        try {
+            // Create a case-insensitive regex filter to match queries containing the
+            // queryTerms
+            Document filter = new Document("query", Pattern.compile(Pattern.quote(queryTerms.trim()),
+                    Pattern.CASE_INSENSITIVE));
+            queriesCollection.find(filter)
+                    .limit(5) // Default limit
+                    .forEach(doc -> suggestions.add(doc.getString("query")));
+
+            return suggestions;
+        } catch (MongoException e) {
+            System.err.println("Error occurred while fetching suggestions for query ");
+            return Collections.emptyList();
+        }
+    }
+
+    public List<Document> getDocuments(List<ObjectId> docsID) {
+        return docCollection.find().into(new ArrayList<>());
+    }
+
     // Optional: Close the connection
     public void close() {
         if (mongoClient != null) {
             mongoClient.close();
             System.out.println("MongoDB connection closed.");
         }
+    }
+
+    public static void main(String[] args) {
+        // Initialize DBManager
+        DBManager dbManager = new DBManager();
+
+        // Close the connection
+        dbManager.close();
     }
 }
