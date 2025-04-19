@@ -36,6 +36,8 @@ import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.Projections;
 import com.mongodb.client.model.Field;
 import org.bson.conversions.Bson;
+import static com.mongodb.client.model.Aggregates.*;
+import static com.mongodb.client.model.Accumulators.*;
 import com.searchengine.navi.indexer.Indexer.Token;
 import com.searchengine.navi.indexer.Posting;
 import static com.mongodb.client.model.Aggregates.*;
@@ -153,18 +155,7 @@ public class DBManager {
                     Aggregates.group(null,
                             Accumulators.sum("total", "$postings.types." + field)));
 
-            // Get the AggregateIterable
-            // AggregateIterable<Document> aggregateIterable =
-            // invertedIndexCollection.aggregate(pipeline);
-
-            // Count the results by iterating
-            // int length = 0;
-            // for (Document doc : aggregateIterable) {
-            // length++;
-            // }
-
-            // return length;
-            Document result = invertedIndexCollection.aggregate(pipeline).first();
+            Document result = invertedIndexerCollection.aggregate(pipeline).first();
             return result != null ? result.getInteger("total", 0) : 0;
         } catch (MongoException e) {
             System.err.println("Error retrieving document ID: " + e.getMessage());
@@ -172,27 +163,24 @@ public class DBManager {
             return -1;
         }
     }
-
+  
     public double getAvgFieldLength(String field) {
         try {
-            AggregateIterable<Document> result = invertedIndexCollection.aggregate(Arrays.asList(
+            AggregateIterable<Document> result = invertedIndexerCollection.aggregate(Arrays.asList(
                     unwind("$postings"),
                     group(null, sum("total", "$postings.types." + field))));
 
-            // Document result = invertedIndexCollection.aggregate(pipeline).first();
-            // double count = result != null ? result.getInteger("totalCount") : 0L;
             Document doc = result.first();
             int count = doc != null ? doc.getInteger("total", 0) : 0;
 
             return count / getDocumentsCount();
-
         } catch (MongoException e) {
             System.err.println("Error retrieving document ID: " + e.getMessage());
             e.printStackTrace();
             return -1;
         }
     }
-    
+
     public List<Document> getWordPostings(String word) {
         try {
             List<Bson> pipeline = Arrays.asList(
@@ -201,14 +189,13 @@ public class DBManager {
                             Projections.include("postings.docID", "postings.types"),
                             Projections.excludeId())));
 
-            Document result = invertedIndexCollection.aggregate(pipeline).first();
+            Document result = invertedIndexerCollection.aggregate(pipeline).first();
             if (result != null) {
                 return result.getList("postings", Document.class);
             }
         } catch (MongoException e) {
             System.err.println("Error retrieving document ID: " + e.getMessage());
             e.printStackTrace();
-
         }
         return new ArrayList<>();
     }
