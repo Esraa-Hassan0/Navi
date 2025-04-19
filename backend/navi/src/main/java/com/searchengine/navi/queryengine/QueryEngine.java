@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -20,6 +21,8 @@ import org.jsoup.Jsoup;
 import org.springframework.web.bind.annotation.*;
 import opennlp.tools.stemmer.PorterStemmer;
 import com.searchengine.dbmanager.DBManager;
+import com.searchengine.navi.Ranker.Ranker;
+
 import java.util.regex.Matcher;
 
 @CrossOrigin(origins = "*", allowedHeaders = "*")
@@ -29,7 +32,8 @@ public class QueryEngine {
 
     private HashSet<String> stopWords;
     private DBManager dbManager;
-    private List<String> tokens = new ArrayList<>(); // Store parsed tokens for snippet generation
+    private Ranker r;
+    private ArrayList<String> tokens = new ArrayList<>(); // Store parsed tokens for snippet generation
     int resultCount = 0; // Counter for the number of results found
     int suggestionCount = 0; // Counter for the number of suggestions found
 
@@ -63,13 +67,13 @@ public class QueryEngine {
     }
 
     @PostMapping("/search")
-    public List<Object> parseQuery(@RequestParam("query") String query) {
+    public ArrayList<String> parseQuery(@RequestParam("query") String query) {
         if (query == null || query.trim().isEmpty()) {
             return new ArrayList<>();
         }
         dbManager.insertSuggestion(query);
 
-        List<Object> result = new ArrayList<>();
+        ArrayList<String> result = new ArrayList<>();
         PorterStemmer stemmer = new PorterStemmer();
         query = query.trim().toLowerCase();
 
@@ -82,10 +86,10 @@ public class QueryEngine {
         boolean isQuoted = query.startsWith("\"") && query.endsWith("\"");
         if (!isQuoted) {
             // Not phrases, just words
-            return tokens.stream()
+            return new ArrayList<>(tokens.stream()
                     .filter(token -> !stopWords.contains(token) && !token.isEmpty())
                     .map(stemmer::stem)
-                    .collect(Collectors.toList());
+                    .collect(Collectors.toList()));
         }
         // Process tokens
         int operatorCount = 0;
@@ -138,12 +142,12 @@ public class QueryEngine {
         }
 
         System.out.println("Parsed query: " + result.stream().map(Object::toString).collect(Collectors.joining(" "))); // Debug
-                                                                                                                       // output
+
         return result;
     }
 
-    private List<String> tokenizeQuery(String query) {
-        List<String> tokens = new ArrayList<>();
+    private ArrayList<String> tokenizeQuery(String query) {
+        ArrayList<String> tokens = new ArrayList<>();
         int i = 0;
         boolean inQuotes = false;
         StringBuilder token = new StringBuilder();
@@ -244,83 +248,109 @@ public class QueryEngine {
     }
 
     public String getSnippet(String docURL) {
-        String content = Jsoup.parse(docURL).text(); // Assuming docID is a URL or HTML content
-
-        // Collect query terms for matching
-        List<String> allWords = new ArrayList<>();
-        List<List<String>> quotedPhrases = new ArrayList<>();
-        List<String> notWords = new ArrayList<>();
-
-        for (int i = 0; i < tokens.size(); i++) {
-            Object element = tokens.get(i);
-            if (element instanceof Phrase) {
-                Phrase phrase = (Phrase) element;
-                List<String> words = phrase.getWords();
-                if (i > 0 && tokens.get(i - 1).equals("NOT")) {
-                    notWords.addAll(words);
-                } else {
-                    if (phrase.isQuoted()) {
-                        quotedPhrases.add(words);
-                    } else {
-                        allWords.addAll(words);
-                    }
-                }
-            }
+        String content;
+        try {
+            content = Jsoup.connect(docURL)
+                    .userAgent("Mozilla/5.0")
+                    .get()
+                    .text();
+        } catch (IOException e) {
+            return "Unable to fetch content.";
         }
 
-        // Remove duplicates
-        List<String> uniqueWords = new ArrayList<>(new HashSet<>(allWords));
-        return generateSnippet(content, uniqueWords, quotedPhrases, notWords);
-    }
-
-    private String generateSnippet(String content, List<String> uniqueWords, List<List<String>> quotedPhrases,
-            List<String> notWords) {
-        StringBuilder snippet = new StringBuilder("... ");
         String contentLower = content.toLowerCase();
+        List<String> lowerTokens = tokens.stream()
+                .map(t -> t.toLowerCase().replaceAll("\"", ""))
+                .collect(Collectors.toList());
 
-        // Highlight quoted phrases first
-        for (List<String> phrase : quotedPhrases) {
-            StringBuilder phraseText = new StringBuilder();
-            for (int i = 0; i < phrase.size(); i++) {
-                phraseText.append(phrase.get(i));
-                if (i < phrase.size() - 1) {
-                    phraseText.append("\\s+");
+        int bestStart = 0;
+        int maxCount = 0;
+
+        for (int i = 0; i < content.length() - 400; i += 50) {
+            int end = Math.min(content.length(), i + 400);
+            String window = contentLower.substring(i, end);
+            int count = 0;
+            for (String token : lowerTokens) {
+                if (window.contains(token)) {
+                    count++;
                 }
             }
-            Pattern pattern = Pattern.compile(phraseText.toString(), Pattern.CASE_INSENSITIVE);
-            Matcher matcher = pattern.matcher(contentLower);
-            if (matcher.find()) {
-                int start = Math.max(0, matcher.start() - 20);
-                int end = Math.min(content.length(), matcher.end() + 20);
-                String excerpt = content.substring(start, end);
-                // Highlight the phrase
-                String phraseStr = content.substring(matcher.start(), matcher.end());
-                excerpt = excerpt.replaceAll("(?i)" + phraseText, "**" + phraseStr + "**");
-                snippet.append(excerpt).append(" ... ");
-                return snippet.toString();
+            if (count > maxCount) {
+                maxCount = count;
+                bestStart = i;
             }
         }
 
-        // Highlight individual words
-        for (String word : uniqueWords) {
-            Pattern pattern = Pattern.compile("\\b" + word + "\\b", Pattern.CASE_INSENSITIVE);
-            Matcher matcher = pattern.matcher(contentLower);
-            if (matcher.find()) {
-                int start = Math.max(0, matcher.start() - 20);
-                int end = Math.min(content.length(), matcher.end() + 20);
-                String excerpt = content.substring(start, end);
-                // Highlight the word
-                excerpt = excerpt.replaceAll("(?i)\\b" + word + "\\b", "**" + word + "**");
-                snippet.append(excerpt).append(" ... ");
-                return snippet.toString();
-            }
+        int snippetEnd = Math.min(content.length(), bestStart + 400);
+        String snippetRaw = content.substring(bestStart, snippetEnd);
+
+        // Highlight tokens in the original-case snippet
+        for (String token : lowerTokens) {
+            snippetRaw = snippetRaw.replaceAll("(?i)\\b" + token + "\\b", "<b>" + token + "</b>");
+
         }
 
-        // If no matches, return a default portion of the content
-        int end = Math.min(50, content.length());
-        snippet.append(content.substring(0, end)).append(" ... ");
-        return snippet.toString();
+        return "... " + snippetRaw.trim() + " ...";
     }
+
+    // private String generateSnippet(String content) {
+    // StringBuilder snippet = new StringBuilder("... ");
+    // String contentLower = content.toLowerCase();
+
+    // // // Highlight quoted phrases first
+    // // for (List<String> phrase : quotedPhrases) {
+    // // StringBuilder phraseText = new StringBuilder();
+    // // for (int i = 0; i < phrase.size(); i++) {
+    // // phraseText.append(phrase.get(i));
+    // // if (i < phrase.size() - 1) {
+    // // phraseText.append("\\s+");
+    // // }
+    // // }
+    // // Pattern pattern = Pattern.compile(phraseText.toString(),
+    // // Pattern.CASE_INSENSITIVE);
+    // // Matcher matcher = pattern.matcher(contentLower);
+    // // if (matcher.find()) {
+    // // int start = Math.max(0, matcher.start() - 20);
+    // // int end = Math.min(content.length(), matcher.end() + 20);
+    // // String excerpt = content.substring(start, end);
+    // // // Highlight the phrase
+    // // String phraseStr = content.substring(matcher.start(), matcher.end());
+    // // excerpt = excerpt.replaceAll("(?i)" + phraseText, "**" + phraseStr +
+    // "**");
+    // // snippet.append(excerpt).append(" ... ");
+    // // return snippet.toString();
+    // // }
+    // // }
+
+    // Set<String> seen = new HashSet<>();
+    // for (String word : tokens) {
+    // if (seen.contains(word.toLowerCase()))
+    // continue;
+    // seen.add(word.toLowerCase());
+
+    // Pattern pattern = Pattern.compile("\\b" + Pattern.quote(word) + "\\b",
+    // Pattern.CASE_INSENSITIVE);
+    // Matcher matcher = pattern.matcher(contentLower);
+
+    // if (matcher.find()) {
+    // int start = Math.max(0, matcher.start() - 30);
+    // int end = Math.min(content.length(), matcher.end() + 30);
+    // String excerpt = content.substring(start, end);
+    // // Highlight the word (preserve original casing)
+    // excerpt = excerpt.replaceAll("(?i)\\b" + Pattern.quote(word) + "\\b", "**" +
+    // word + "**");
+    // snippet.append(excerpt).append(" ... ");
+    // }
+    // }
+
+    // // return snippet.toString();
+
+    // // If no matches, return a default portion of the content
+    // int end = Math.min(50, content.length());
+    // snippet.append(content.substring(0, end)).append(" ... ");
+    // System.out.println("Snippet: " + snippet.toString()); // Debug
+    // return snippet.toString();
+    // }
 
     @GetMapping("/suggestions")
     public List<String> getSuggestions(@RequestParam("query") String query) {
@@ -329,11 +359,41 @@ public class QueryEngine {
         return suggestions;
     }
 
-    public List<Document> getResults(List<ObjectId> docs) {
+    @GetMapping("/results")
+    public Document getResults() {
+        // Initialize Ranker with search tokens
+        // ArrayList<String> tokens = new ArrayList<>();
+        // tokens.add("been");
+        r = new Ranker(tokens);
+        r.test();
 
-        // List<Document> results = dbManager.getDocuments(docs);
-        return null;
-        // // dbManager.g
+        // Get ranked document IDs
+        List<Integer> docIds = r.sortDocs();
+
+        // Fetch documents using DB manager
+        System.out.println("docIds: " + docIds); // Debug
+        List<Document> results = dbManager.getDocumentsByID(docIds);
+        System.out.println("Results: " + results); // Debug
+        int availableCount = resultCount; // assume this is set somewhere earlier
+
+        // Process documents
+        for (Document result : results) {
+            String docURL = result.getString("url");
+            String snippet = getSnippet(docURL); // use your actual snippet logic
+            result.remove("content");
+            result.remove("_id");
+            result.append("snippets", snippet);
+            if (snippet == null) {
+                availableCount--;
+            }
+        }
+
+        // Assemble response
+        Document data = new Document("results", results);
+        // .append("count", resultCount)
+        // .append("availableCount", availableCount);
+
+        return data;
     }
 
     // For testing

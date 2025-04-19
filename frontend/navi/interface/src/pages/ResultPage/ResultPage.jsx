@@ -80,6 +80,31 @@ function ResultPage() {
     return () => clearTimeout(debounce);
   }, [query]);
 
+  useEffect(() => {
+    const fetchResults = async () => {
+      if (!query || query.trim() === "") {
+        setResults([]);
+        return;
+      }
+      try {
+        const response = await axios.get("http://localhost:8080/results");
+        const responsedata = response.data.results || [];
+        setResults(responsedata || []);
+        console.log("resultsssss:", responsedata);
+      } catch (error) {
+        console.error("Error fetching suggestions:", error);
+        setResults([]);
+      } finally {
+        setLoading(false); // Set loading to false after fetching results
+      }
+    };
+
+    // Debounce the API call to avoid excessive requests
+
+    const debounce = setTimeout(fetchResults, 300);
+    return () => clearTimeout(debounce);
+  }, [query, pendingSuggestion]);
+
   const handleKeyPress = (e) => {
     if (e.key === "Enter") {
       handleSearch(e);
@@ -98,6 +123,7 @@ function ResultPage() {
 
   const handleSearch = async (e) => {
     e.preventDefault();
+    setLoading(true);
     setSuggestions([]); // Clear suggestions on search
     try {
       const response = await axios.post(
@@ -115,6 +141,8 @@ function ResultPage() {
       console.error("Error fetching search results:", error);
       setResults([]);
       setTokens([]);
+    } finally {
+      // setLoading(false);
     }
   };
 
@@ -168,180 +196,204 @@ function ResultPage() {
 
   return (
     <>
-      <div className={`pageContainer ${isDarkMode ? "dark" : "light"}`}>
-        <div className="navbar">
-          {!isDarkMode && <img src={logo} className="logo" alt="Logo" />}
-          {isDarkMode && (
-            <img
-              src={logoLightMode}
-              className="logoLightMode"
-              alt="Logo Light Mode"
-            />
-          )}
-          <div className="searchContainer">
-            <FontAwesomeIcon
-              icon={faMagnifyingGlass}
-              style={{ color: "#f93ee9" }}
-              className="searchIcon"
-            />
-            <input
-              placeholder="Search"
-              className="SearchBar"
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setIsTyping(true);
-                setPendingSuggestion(null); // Clear pending suggestion on manual input
-              }}
-              onKeyPress={handleKeyPress}
-            />
-            {loading && (
-              <FontAwesomeIcon icon={faSpinner} spin className="spinnerIcon" />
+      {loading ? (
+        <div className="loadingContainer">
+          <div className="loader"></div>
+        </div>
+      ) : (
+        <div className={`pageContainer ${isDarkMode ? "dark" : "light"}`}>
+          <div className="navbar">
+            {!isDarkMode && <img src={logo} className="logo" alt="Logo" />}
+            {isDarkMode && (
+              <img
+                src={logoLightMode}
+                className="logoLightMode"
+                alt="Logo Light Mode"
+              />
             )}
-            {/* Suggestions Dropdown */}
-            {suggestions.length > 0 && isTyping && (
-              <ul className="suggestions-dropdown">
-                {suggestions.map((suggestion, index) => (
-                  <li
-                    key={index}
-                    onClick={() => handleSuggestionClick(suggestion)}
-                    className="suggestion-item"
-                  >
-                    <FontAwesomeIcon
-                      icon={faMagnifyingGlass}
-                      style={{ color: "gray", marginRight: "8px" }}
-                    />
-                    {suggestion}
-                  </li>
-                ))}
-              </ul>
+            <div className="searchContainer">
+              <FontAwesomeIcon
+                icon={faMagnifyingGlass}
+                style={{ color: "#f93ee9" }}
+                className="searchIcon"
+              />
+              <input
+                placeholder="Search"
+                className="SearchBar"
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setIsTyping(true);
+                  setPendingSuggestion(null); // Clear pending suggestion on manual input
+                }}
+                onKeyPress={handleKeyPress}
+              />
+              {loading && (
+                <FontAwesomeIcon
+                  icon={faSpinner}
+                  spin
+                  className="spinnerIcon"
+                />
+              )}
+              {/* Suggestions Dropdown */}
+              {suggestions.length > 0 && isTyping && (
+                <ul className="suggestions-dropdown">
+                  {suggestions.map((suggestion, index) => (
+                    <li
+                      key={index}
+                      onClick={() => handleSuggestionClick(suggestion)}
+                      className="suggestion-item"
+                    >
+                      <FontAwesomeIcon
+                        icon={faMagnifyingGlass}
+                        style={{ color: "gray", marginRight: "8px" }}
+                      />
+                      {suggestion}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            {!isDarkMode && (
+              <img
+                src={DarkModeIcon}
+                className="darkModeIcon"
+                onClick={toggleDarkMode}
+                alt="Dark Mode Toggle"
+              />
+            )}
+            {isDarkMode && (
+              <img
+                src={LightModeIcon}
+                className="lightModeIcon"
+                onClick={toggleDarkMode}
+                alt="Light Mode Toggle"
+              />
             )}
           </div>
+          <img src={shape} className="shapeImage" alt="Shape Decoration" />
+          <img src={shape2} className="shapeImage2" alt="Shape 2 Decoration" />
+          {results.length > 0 && (
+            <>
+              <div className="data">
+                <div className="timeSearching">
+                  You found {results.length} items related in 3.1111 s
+                </div>
+              </div>
+              <div className="Tokens">
+                <ul className="listTokens">
+                  {tokens.map((token, index) => (
+                    <li className="token">{token}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="contentWrapper">
+                <ul className="resultsList">
+                  {currentResults.map((result, index) => (
+                    <li key={index} className="resultItem">
+                      <div className="resultWithFavicon">
+                        <div className="firstBlock">
+                          <div className="firstBlock1">
+                            <img
+                              src={getFaviconUrl(result.url)}
+                              alt={`${result.title} favicon`}
+                              className="resultFavicon"
+                            />
+                          </div>
+                          <div className="firstBlock2">
+                            <div className="webName">
+                              {getWebName(result.url)}
+                            </div>
+                            <a
+                              href={result.url}
+                              className="resultUrl"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              {result.url}
+                            </a>
+                          </div>
+                        </div>
+                        <div className="resultContent">
+                          <h3 className="resultTitle">
+                            {" "}
+                            <a
+                              href={result.url}
+                              // className="resultUrl"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              {result.title}
+                            </a>
+                          </h3>
+                          <p className="resultSnippet">
+                            <div
+                              dangerouslySetInnerHTML={{ __html: result.snippets }}
+                            />
+                          </p>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <div className="suggestions">
+                  <h4>Related Searches</h4>
+                  <ul className="suggestionList">
+                    {suggestions.length > 0 ? (
+                      suggestions.map((suggestion, index) => (
+                        <li
+                          key={index}
+                          className="suggestionItem"
+                          onClick={() => handleSuggestionClick(suggestion)}
+                        >
+                          {suggestion}
+                        </li>
+                      ))
+                    ) : (
+                      <li className="noSuggestions">No related searches</li>
+                    )}
+                  </ul>
+                </div>
+              </div>
+              {results.length > itemsPerPage && (
+                <div className="pagination">
+                  <button
+                    onClick={goToPreviousPage}
+                    disabled={currentPage === 1}
+                    className="pageButton"
+                  >
+                    <FontAwesomeIcon icon={faArrowLeft} />
+                  </button>
+                  <span className="pageInfo">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <button
+                    onClick={goToNextPage}
+                    disabled={currentPage === totalPages}
+                    className="pageButton"
+                  >
+                    <FontAwesomeIcon icon={faArrowRight} />
+                  </button>
+                </div>
+              )}
+            </>
+          )}
           {!isDarkMode && (
             <img
-              src={DarkModeIcon}
-              className="darkModeIcon"
-              onClick={toggleDarkMode}
-              alt="Dark Mode Toggle"
+              src={footer}
+              alt="Footer Image"
+              className={`footer ${results.length > 0 ? "items" : "no_items"}`}
             />
           )}
           {isDarkMode && (
-            <img
-              src={LightModeIcon}
-              className="lightModeIcon"
-              onClick={toggleDarkMode}
-              alt="Light Mode Toggle"
-            />
+            <div
+              className={`footerdark ${
+                results.length > 0 ? "items" : "no_items"
+              }`}
+            ></div>
           )}
         </div>
-        <img src={shape} className="shapeImage" alt="Shape Decoration" />
-        <img src={shape2} className="shapeImage2" alt="Shape 2 Decoration" />
-        {tokens.length > 0 && (
-          <>
-            <div className="data">
-              <div className="timeSearching">
-                You found {results.length} items related in 3.1111 s
-              </div>
-            </div>
-            <div className="Tokens">
-              <ul className="listTokens">
-                {tokens.map((token, index) => (
-                  <li className="token">{token}</li>
-                ))}
-              </ul>
-            </div>
-            <div className="contentWrapper">
-              <ul className="resultsList">
-                {currentResults.map((result, index) => (
-                  <li key={index} className="resultItem">
-                    <div className="resultWithFavicon">
-                      <div className="firstBlock">
-                        <div className="firstBlock1">
-                          <img
-                            src={getFaviconUrl(result.url)}
-                            alt={`${result.title} favicon`}
-                            className="resultFavicon"
-                          />
-                        </div>
-                        <div className="firstBlock2">
-                          <div className="webName">
-                            {getWebName(result.url)}
-                          </div>
-                          <a
-                            href={result.url}
-                            className="resultUrl"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            {result.url}
-                          </a>
-                        </div>
-                      </div>
-                      <div className="resultContent">
-                        <h3 className="resultTitle">{result.title}</h3>
-                        <p className="resultSnippet">{result.snippet}</p>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              <div className="suggestions">
-                <h4>Related Searches</h4>
-                <ul className="suggestionList">
-                  {suggestions.length > 0 ? (
-                    suggestions.map((suggestion, index) => (
-                      <li
-                        key={index}
-                        className="suggestionItem"
-                        onClick={() => handleSuggestionClick(suggestion)}
-                      >
-                        {suggestion}
-                      </li>
-                    ))
-                  ) : (
-                    <li className="noSuggestions">No related searches</li>
-                  )}
-                </ul>
-              </div>
-            </div>
-            {results.length > itemsPerPage && (
-              <div className="pagination">
-                <button
-                  onClick={goToPreviousPage}
-                  disabled={currentPage === 1}
-                  className="pageButton"
-                >
-                  <FontAwesomeIcon icon={faArrowLeft} />
-                </button>
-                <span className="pageInfo">
-                  Page {currentPage} of {totalPages}
-                </span>
-                <button
-                  onClick={goToNextPage}
-                  disabled={currentPage === totalPages}
-                  className="pageButton"
-                >
-                  <FontAwesomeIcon icon={faArrowRight} />
-                </button>
-              </div>
-            )}
-          </>
-        )}
-        {!isDarkMode && (
-          <img
-            src={footer}
-            alt="Footer Image"
-            className={`footer ${results.length > 0 ? "items" : "no_items"}`}
-          />
-        )}
-        {isDarkMode && (
-          <div
-            className={`footerdark ${
-              results.length > 0 ? "items" : "no_items"
-            }`}
-          ></div>
-        )}
-      </div>
+      )}
     </>
   );
 }

@@ -109,6 +109,9 @@ public class DBManager {
             return -1;
         }
     }
+    public List<Document> getDocumentsByID(List<Integer> ids) {
+        return docCollection.find(Filters.in("id", ids)).into(new ArrayList<>());
+    }    
 
     public int getDocumentsCount() {
         try {
@@ -125,7 +128,10 @@ public class DBManager {
         try {
             Document filter = new Document("word", word);
             Document doc = invertedIndexCollection.find(filter).first();
-
+            if (doc == null) {
+                System.out.println("No document found with word: " + word);
+                return -1;
+            }
             List<?> array = doc.getList("postings", Object.class);
             int length = array.size();
 
@@ -186,7 +192,7 @@ public class DBManager {
             return -1;
         }
     }
-
+    
     public List<Document> getWordPostings(String word) {
         try {
             List<Bson> pipeline = Arrays.asList(
@@ -195,7 +201,7 @@ public class DBManager {
                             Projections.include("postings.docID", "postings.types"),
                             Projections.excludeId())));
 
-            Document result = invertedIndexerCollection.aggregate(pipeline).first();
+            Document result = invertedIndexCollection.aggregate(pipeline).first();
             if (result != null) {
                 return result.getList("postings", Document.class);
             }

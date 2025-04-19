@@ -44,8 +44,8 @@ public class Ranker {
         docsCount = dbManager.getDocumentsCount();
         System.out.println(GREEN + "Docs No.: " + docsCount + RESET);
     }
-
-    List<Integer> sortDocs() {
+    
+    public List<Integer> sortDocs() {
         List<Integer> sortedDocs = new ArrayList<>(commonDocs);
         sortedDocs.sort((id1, id2) -> Double.compare(scores.get(id2), scores.get(id1)));
         return sortedDocs;
@@ -108,7 +108,7 @@ public class Ranker {
         return result;
     }
 
-    void test() {
+    public void test() {
         BM25F();
         for (int doc : commonDocs) {
             System.out.println("docId: " + doc + "score: " + scores.get(doc));
