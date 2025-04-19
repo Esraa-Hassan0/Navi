@@ -365,7 +365,7 @@ public class QueryEngine {
         // ArrayList<String> tokens = new ArrayList<>();
         // tokens.add("been");
         r = new Ranker(tokens);
-        r.test();
+        r.sortDocs();
 
         // Get ranked document IDs
         List<Integer> docIds = r.sortDocs();

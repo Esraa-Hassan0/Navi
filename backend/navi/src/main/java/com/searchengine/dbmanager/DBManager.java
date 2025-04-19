@@ -40,8 +40,6 @@ import static com.mongodb.client.model.Aggregates.*;
 import static com.mongodb.client.model.Accumulators.*;
 import com.searchengine.navi.indexer.Indexer.Token;
 import com.searchengine.navi.indexer.Posting;
-import static com.mongodb.client.model.Aggregates.*;
-import static com.mongodb.client.model.Accumulators.*;
 
 public class DBManager {
     private static final Logger logger = LoggerFactory.getLogger(DBManager.class);
@@ -111,9 +109,10 @@ public class DBManager {
             return -1;
         }
     }
+
     public List<Document> getDocumentsByID(List<Integer> ids) {
         return docCollection.find(Filters.in("id", ids)).into(new ArrayList<>());
-    }    
+    }
 
     public int getDocumentsCount() {
         try {
@@ -155,7 +154,7 @@ public class DBManager {
                     Aggregates.group(null,
                             Accumulators.sum("total", "$postings.types." + field)));
 
-            Document result = invertedIndexerCollection.aggregate(pipeline).first();
+            Document result = invertedIndexCollection.aggregate(pipeline).first();
             return result != null ? result.getInteger("total", 0) : 0;
         } catch (MongoException e) {
             System.err.println("Error retrieving document ID: " + e.getMessage());
@@ -163,10 +162,10 @@ public class DBManager {
             return -1;
         }
     }
-  
+
     public double getAvgFieldLength(String field) {
         try {
-            AggregateIterable<Document> result = invertedIndexerCollection.aggregate(Arrays.asList(
+            AggregateIterable<Document> result = invertedIndexCollection.aggregate(Arrays.asList(
                     unwind("$postings"),
                     group(null, sum("total", "$postings.types." + field))));
 
@@ -189,7 +188,7 @@ public class DBManager {
                             Projections.include("postings.docID", "postings.types"),
                             Projections.excludeId())));
 
-            Document result = invertedIndexerCollection.aggregate(pipeline).first();
+            Document result = invertedIndexCollection.aggregate(pipeline).first();
             if (result != null) {
                 return result.getList("postings", Document.class);
             }
