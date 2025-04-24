@@ -370,6 +370,7 @@ public class QueryEngine {
         // Initialize Ranker with search tokens
         // ArrayList<String> tokens = new ArrayList<>();
         // tokens.add("been");
+
         r = new Ranker(tokens, phraseQuery.getPhrase(), phraseQuery.isQuoted());
         r.sortDocs();
 
