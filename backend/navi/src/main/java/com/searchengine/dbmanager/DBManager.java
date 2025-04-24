@@ -1,5 +1,6 @@
 package com.searchengine.dbmanager;
 
+import java.lang.reflect.Array;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -323,6 +324,15 @@ public class DBManager {
 
     public List<Document> getDocuments(List<ObjectId> docsID) {
         return docCollection.find().into(new ArrayList<>());
+    }
+
+    // For phrase matching
+    public ArrayList<Document> getDocumentsContent() {
+        ArrayList<Document> docs = docCollection.find()
+                .projection(new Document("content", 1).append("url", 1).append("id", 1))
+                .into(new ArrayList<>());
+
+        return docs;
     }
 
     // Optional: Close the connection

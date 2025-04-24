@@ -38,22 +38,24 @@ public class QueryEngine {
     int suggestionCount = 0; // Counter for the number of suggestions found
 
     public static class Phrase {
-        private List<String> words;
-        private boolean isQuoted;
+        private String phrase = "";
+        private boolean isQuoted = false;
 
-        public Phrase(List<String> words, boolean isQuoted) {
-            this.words = words;
+        public Phrase(String phrase, boolean isQuoted) {
+            this.phrase = phrase;
             this.isQuoted = isQuoted;
         }
 
-        public List<String> getWords() {
-            return words;
+        public String getPhrase() {
+            return phrase;
         }
 
         public boolean isQuoted() {
             return isQuoted;
         }
     }
+
+    private Phrase phraseQuery;
 
     public QueryEngine() {
         addStopWords();
@@ -109,6 +111,10 @@ public class QueryEngine {
                 if (isQuoted) {
                     // Remove quotes for processing
                     token = token.substring(1, token.length() - 1);
+
+                    // TODO: CALL function TO GET THE PHRASE and then matched docs
+                    phraseQuery = new Phrase(token, true);
+
                 }
                 String phrase = processPhrase(token, stemmer);
 
@@ -364,7 +370,7 @@ public class QueryEngine {
         // Initialize Ranker with search tokens
         // ArrayList<String> tokens = new ArrayList<>();
         // tokens.add("been");
-        r = new Ranker(tokens);
+        r = new Ranker(tokens, phraseQuery.getPhrase(), phraseQuery.isQuoted());
         r.sortDocs();
 
         // Get ranked document IDs

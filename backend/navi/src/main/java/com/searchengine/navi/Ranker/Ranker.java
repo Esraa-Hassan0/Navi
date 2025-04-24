@@ -1,10 +1,14 @@
 package com.searchengine.navi.Ranker;
 
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.lang.Math;
 import com.searchengine.dbmanager.DBManager;
+import com.searchengine.navi.queryengine.PhraseMatching;
 
 import org.bson.Document;
+import org.jsoup.Jsoup;
 import org.springframework.data.mongodb.core.aggregation.ArrayOperators.In;
 
 public class Ranker {
@@ -23,9 +27,14 @@ public class Ranker {
     private double relWeight = 0.7;
     private double popWeight = 0.3;
 
+    // Phrase matching
+
+    private boolean isPhrase = false;
+    private String phrase = "";
+
     static DBManager dbManager;
 
-    public Ranker(ArrayList<String> queryTerms) {
+    public Ranker(ArrayList<String> queryTerms, String phrase, boolean isPhrase) {
         terms = queryTerms;
         dbManager = new DBManager();
         scores = new HashMap<>();
@@ -34,13 +43,23 @@ public class Ranker {
         commonDocs = new HashSet<>();
         docsCount = dbManager.getDocumentsCount();
         System.out.println(GREEN + "Docs No.: " + docsCount + RESET);
+
+        // phrase matching
+
+        this.phrase = phrase;
+        this.isPhrase = isPhrase;
     }
 
     void rank() {
         Relevance relevance = new Relevance();
         Popularity popularity = new Popularity();
 
-        relevance.BM25F();
+        if (isPhrase) {
+            rankPhrase(phrase);
+        } else {
+            relevance.BM25F();
+        }
+
         popularity.PageRank();
 
         for (int doc : commonDocs) {
@@ -60,6 +79,72 @@ public class Ranker {
         List<Integer> sortedDocs = new ArrayList<>(commonDocs);
         sortedDocs.sort((id1, id2) -> Double.compare(scores.get(id2), scores.get(id1)));
         return sortedDocs;
+    }
+
+    // this funcction has to fill relevanceScores and commonDocs
+    void rankPhrase(String phrase) {
+
+        String regex = new PhraseMatching().BuildStringRegex(phrase);
+        Pattern pattern = Pattern.compile(regex);
+
+        // Define weights
+        Map<String, Double> fieldWeights = Map.of(
+                "h1", 2.5,
+                "h2", 2.0,
+                "a", 1.5,
+                "body", 1.0 // fallback field
+        );
+
+        ArrayList<Document> docs = dbManager.getDocumentsContent();
+
+        for (Document doc : docs) {
+            Integer docId = doc.getInteger("id");
+            String url = doc.getString("url");
+
+            if (docId == null || url == null || url.isEmpty()) {
+                continue;
+            }
+            // To be replaced after hagar put them in the database
+            try {
+                org.jsoup.nodes.Document jsoupDoc = Jsoup.connect(url).get(); // fetch HTML from URL
+                double score = 0.0;
+
+                // Debug output
+                System.out.println(PURPLE + jsoupDoc.text() + " ==========TEXT===========" + RESET);
+                System.out.println(GREEN + jsoupDoc.select("h1,h2").text() + " =========H1============" + RESET);
+
+                for (Map.Entry<String, Double> entry : fieldWeights.entrySet()) {
+                    String tag = entry.getKey();
+                    double weight = entry.getValue();
+
+                    String fieldText = tag.equals("body") ? jsoupDoc.body().text() : jsoupDoc.select(tag).text();
+                    fieldText = fieldText.toLowerCase().trim().replaceAll("\\s+", " ");
+
+                    Matcher matcher = pattern.matcher(fieldText);
+                    int freq = 0;
+                    while (matcher.find()) {
+                        freq++;
+                    }
+
+                    String[] fieldWords = fieldText.split("\\s+");
+                    int fieldLength = fieldWords.length;
+
+                    // If the field length is greater than 0, compute score
+                    if (fieldLength > 0) {
+                        double fieldScore = weight * ((double) freq / fieldLength);
+                        score += fieldScore;
+                    }
+                }
+
+                if (score > 0.0) {
+                    relevanceScores.put(docId, score);
+                    commonDocs.add(docId);
+                }
+
+            } catch (Exception e) {
+                System.out.println(RED + "Error fetching HTML for URL: " + url + " — " + e.getMessage() + RESET);
+            }
+        }
     }
 
     class Relevance {
@@ -161,7 +246,7 @@ public class Ranker {
         ArrayList<String> terms = new ArrayList<>();
         terms.add("skdjfalkj");
         terms.add("branch");
-        Ranker r = new Ranker(terms);
+        Ranker r = new Ranker(terms, "Blick nach vorn", true);
         List<Integer> docs = r.sortDocs();
         for (int doc : docs) {
             System.out.println(doc);
