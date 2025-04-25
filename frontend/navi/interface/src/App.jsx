@@ -1,13 +1,17 @@
-import "./App.css";
-import ResultPage from "./pages/ResultPage/ResultPage";
-import SearchPage from "./pages/SearchPage/SearchPage.jsx";
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import SearchPage from './pages/SearchPage/SearchPage'; // Adjust path if needed
+import ResultPage from './pages/ResultPage/ResultPage'; // We'll create this next
+import './App.css';
 
 function App() {
   return (
-    <>
-    <SearchPage />
-    {/* <ResultPage /> */}
-    </>
+    <Router>
+      <Routes>
+        <Route path="/" element={<SearchPage />} />
+        <Route path="/results" element={<ResultPage />} />
+      </Routes>
+    </Router>
   );
 }
 

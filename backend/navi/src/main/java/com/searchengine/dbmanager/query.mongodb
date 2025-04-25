@@ -1,0 +1,14 @@
+db.getMongo().getDBs();
+use("navi");
+db.getCollectionNames();
+db.getCollection("doc").insert({
+  id: 0,
+  url: "http://www.google.com",
+  title: "Google",
+  content: "Google is a search engine",
+});
+db.getCollection("inverted index").insert({
+  id: 0,
+  word: "Google",
+  postings: [{ docId: 0, tf: 1, positions: [{ type: "h1", pos: 0 }] }],
+});
