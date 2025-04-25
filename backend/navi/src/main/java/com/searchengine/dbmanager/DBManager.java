@@ -58,6 +58,7 @@ public class DBManager {
     private MongoCollection<Document> invertedIndexCollection; // Fixed typo
     private MongoCollection<Document> docCollection;
     private MongoCollection<Document> queriesCollection;
+    private boolean isShuttingDown;
 
     public DBManager() {
         if (mongoClient == null) { // Ensure only one connection is created
@@ -158,10 +159,10 @@ public class DBManager {
             List<Bson> pipeline = Arrays.asList(
                     Aggregates.match(Filters.elemMatch("postings",
                             Filters.eq("docID", docId))),
-                    Aggregates.unwind("$postings"),
+                    Aggregates.unwind(""),
                     Aggregates.match(Filters.eq("postings.docID", docId)),
                     Aggregates.group(null,
-                            Accumulators.sum("total", "$postings.types." + field)));
+                            Accumulators.sum("total", ".types." + field)));
 
             Document result = invertedIndexCollection.aggregate(pipeline).first();
             return result != null ? result.getInteger("total", 0) : 0;
@@ -175,8 +176,8 @@ public class DBManager {
     public double getAvgFieldLength(String field) {
         try {
             AggregateIterable<Document> result = invertedIndexCollection.aggregate(Arrays.asList(
-                    unwind("$postings"),
-                    group(null, sum("total", "$postings.types." + field))));
+                    unwind(""),
+                    group(null, sum("total", ".types." + field))));
 
             Document doc = result.first();
             int count = doc != null ? doc.getInteger("total", 0) : 0;
@@ -229,7 +230,7 @@ public class DBManager {
         // First, fetch all existing words to check what's already in the database
         Set<String> wordsToProcess = invertedIndex.keySet();
         MongoCursor<Document> existingDocs = invertedIndexCollection
-                .find(new Document("word", new Document("$in", new ArrayList<>(wordsToProcess))))
+                .find(new Document("word", new Document("", new ArrayList<>(wordsToProcess))))
                 .iterator();
 
         // Create a map of existing words for quick lookup
@@ -303,7 +304,7 @@ public class DBManager {
                 bulkOperations.add(
                         new UpdateOneModel<>(
                                 new Document("word", word),
-                                new Document("$set", new Document("postings", updatedPostings))));
+                                new Document("", new Document("postings", updatedPostings))));
                 updateCount++;
             } else {
                 // Word doesn't exist, prepare insert operation
@@ -436,9 +437,51 @@ public class DBManager {
 
     // Optional: Close the connection
     public void close() {
-        if (mongoClient != null) {
-            mongoClient.close();
-            System.out.println("MongoDB connection closed.");
+        try {
+            // Tell any monitoring code you're in shutdown process
+            isShuttingDown = true;
+
+            if (mongoClient != null) {
+                // Stop any ongoing operations
+                try {
+                    // Give background operations time to complete naturally
+                    Thread.sleep(500);
+                } catch (InterruptedException ignored) {
+                    // Ignore if interrupted during sleep
+                }
+
+                // Get the current thread group
+                ThreadGroup group = Thread.currentThread().getThreadGroup();
+                // Estimate thread count
+                int estimatedSize = group.activeCount() * 2;
+                Thread[] threads = new Thread[estimatedSize];
+                // Fill our array with active threads
+                int actualSize = group.enumerate(threads);
+
+                // Find and interrupt MongoDB monitoring threads before closing
+                for (int i = 0; i < actualSize; i++) {
+                    Thread thread = threads[i];
+                    String threadName = thread.getName();
+                    // Look for MongoDB driver threads
+                    if (threadName.contains("cluster-") && threadName.contains("mongodb")) {
+                        try {
+                            // Interrupt these threads explicitly
+                            thread.interrupt();
+                        } catch (Exception ignored) {
+                            // Ignore any errors from this attempt
+                        }
+                    }
+                }
+
+                // Now close the client
+                Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                    mongoClient.close();
+                }));
+                System.out.println("MongoDB connection closed successfully.");
+            }
+        } catch (Exception e) {
+            System.err.println("Error during MongoDB connection closure: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
