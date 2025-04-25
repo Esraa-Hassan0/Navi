@@ -1,7 +1,7 @@
 package com.searchengine.navi.indexer;
 
-// import org.bson.Document;
-import org.jsoup.nodes.Document;
+import org.bson.Document;
+//import org.jsoup.nodes.Document;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.Buffer;
@@ -58,26 +58,46 @@ public class Indexer {
     }
 
     public HashMap<String, Token> tokenizeDocument(Document doc, HashMap<String, Token> tokenMap) {
-        String url = doc.location();
+        // String url = doc.location();
+        // int docId = dbmanager.retrieveDocID(url);
+        // String text = doc.text();
+
+        String url = doc.getString("url");
         int docId = dbmanager.retrieveDocID(url);
-        String text = doc.text();
+        String text = doc.getString("content");
 
         // System.out.println(PURPLE);
         // System.out.println(text);
         // System.out.println(RESET);
 
-        Elements h1Tags = doc.select("h1");
-        Elements h2Tags = doc.select("h2");
-        Elements anchorTags = doc.select("a[href]");
+        // Elements h1Tags = doc.select("h1");
+        // Elements h2Tags = doc.select("h2");
+        // Elements anchorTags = doc.select("a[href]");
+        // Elements h1Tags = doc.select("h1");
+        // Elements h2Tags = doc.select("h2");
+        // Elements anchorTags = doc.select("a[href]");
 
-        System.out.println(PURPLE + "H1 Tags: " + h1Tags.text() + RESET);
-        tokenizeText(h1Tags.text(), tokenMap, docId, "h1");
+        String h1Tags = doc.getString("h1");
+        String h2Tags = doc.getString("h2");
+        String anchorTags = doc.getString("children");
 
-        System.out.println(PURPLE + "H2 Tags: " + h2Tags.text() + RESET);
-        tokenizeText(h2Tags.text(), tokenMap, docId, "h2");
+        // System.out.println(PURPLE + "H1 Tags: " + h1Tags.text() + RESET);
+        // tokenizeText(h1Tags.text(), tokenMap, docId, "h1");
 
-        System.out.println(PURPLE + "Anchor Tags: " + anchorTags.text() + RESET);
-        tokenizeText(anchorTags.text(), tokenMap, docId, "a");
+        // System.out.println(PURPLE + "H2 Tags: " + h2Tags.text() + RESET);
+        // tokenizeText(h2Tags.text(), tokenMap, docId, "h2");
+
+        // System.out.println(PURPLE + "Anchor Tags: " + anchorTags.text() + RESET);
+        // tokenizeText(anchorTags.text(), tokenMap, docId, "a");
+
+        System.out.println(PURPLE + "H1 Tags: " + h1Tags + RESET);
+        tokenizeText(h1Tags, tokenMap, docId, "h1");
+
+        System.out.println(PURPLE + "H2 Tags: " + h2Tags + RESET);
+        tokenizeText(h2Tags, tokenMap, docId, "h2");
+
+        // System.out.println(PURPLE + "Anchor Tags: " + anchorTags + RESET);
+        // tokenizeText(anchorTags, tokenMap, docId, "a");
 
         tokenizeText(text, tokenMap, docId, "other");
         return tokenMap;
@@ -140,10 +160,13 @@ public class Indexer {
     }
 
     public static void main(String[] args) {
-
+        DBManager dbmanager = new DBManager();
         System.out.println(GREEN + "Starting tokenization..." + RESET);
         try {
-            Document doc = Jsoup.connect("https://toolsfairy.com/code-test/sample-html-files#").get();
+            // Document doc =
+            // Jsoup.connect("https://toolsfairy.com/code-test/sample-html-files#").get();
+            Document doc = dbmanager.getUnindexedDocuments().first();
+
             Indexer indexer = new Indexer();
             HashMap<String, Token> tokenMap = new HashMap<>();
             tokenMap = indexer.tokenizeDocument(doc, tokenMap);
