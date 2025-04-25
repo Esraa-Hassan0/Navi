@@ -136,78 +136,152 @@ public class DBManager {
         }
     }
 
-    public int getDF(String word) {
-        try {
-            Document filter = new Document("word", word);
-            Document doc = invertedIndexCollection.find(filter).first();
-            if (doc == null) {
-                System.out.println("No document found with word: " + word);
-                return -1;
-            }
-            List<?> array = doc.getList("postings", Object.class);
-            int length = array.size();
+    public HashMap<String, Integer> getDFs(List<String> words) {
+        HashMap<String, Integer> dfMap = new HashMap<>();
 
-            return length;
-        } catch (MongoException e) {
-            System.err.println("Error retrieving document ID: " + e.getMessage());
-            e.printStackTrace();
-            return -1;
+        // Initialize map with -1 for all words
+        for (String word : words) {
+            dfMap.put(word, -1);
         }
-    }
 
-    public int getFieldLengthPerDoc(int docId, String field) {
         try {
-            List<Bson> pipeline = Arrays.asList(
-                    Aggregates.match(Filters.elemMatch("postings",
-                            Filters.eq("docID", docId))),
-                    Aggregates.unwind(""),
-                    Aggregates.match(Filters.eq("postings.docID", docId)),
-                    Aggregates.group(null,
-                            Accumulators.sum("total", ".types." + field)));
+            Iterable<Document> documents = invertedIndexCollection.find(
+                    Filters.in("word", words));
 
-            Document result = invertedIndexCollection.aggregate(pipeline).first();
-            return result != null ? result.getInteger("total", 0) : 0;
-        } catch (MongoException e) {
-            System.err.println("Error retrieving document ID: " + e.getMessage());
-            e.printStackTrace();
-            return -1;
-        }
-    }
-
-    public double getAvgFieldLength(String field) {
-        try {
-            AggregateIterable<Document> result = invertedIndexCollection.aggregate(Arrays.asList(
-                    unwind(""),
-                    group(null, sum("total", ".types." + field))));
-
-            Document doc = result.first();
-            int count = doc != null ? doc.getInteger("total", 0) : 0;
-
-            return count / getDocumentsCount();
-        } catch (MongoException e) {
-            System.err.println("Error retrieving document ID: " + e.getMessage());
-            e.printStackTrace();
-            return -1;
-        }
-    }
-
-    public List<Document> getWordPostings(String word) {
-        try {
-            List<Bson> pipeline = Arrays.asList(
-                    Aggregates.match(Filters.eq("word", word)),
-                    Aggregates.project(Projections.fields(
-                            Projections.include("postings.docID", "postings.types"),
-                            Projections.excludeId())));
-
-            Document result = invertedIndexCollection.aggregate(pipeline).first();
-            if (result != null) {
-                return result.getList("postings", Document.class);
+            // Process each document
+            for (Document doc : documents) {
+                String word = doc.getString("word");
+                List<?> postings = doc.getList("postings", Object.class);
+                if (postings != null) {
+                    dfMap.put(word, postings.size());
+                } else {
+                    logger.warn("No postings found for word: {}", word);
+                }
             }
         } catch (MongoException e) {
-            System.err.println("Error retrieving document ID: " + e.getMessage());
+            logger.error("Error retrieving DFs: {}", e.getMessage(), e);
+        }
+
+        return dfMap;
+    }
+
+    public Map<Integer, Map<String, Integer>> getFieldOccurrencesForDocs(List<Integer> docIds) {
+        Map<Integer, Map<String, Integer>> result = new HashMap<>();
+        String fields[] = { "h1", "h2", "a", "other" };
+
+        // Aggregation pipeline
+        List<Bson> pipeline = Arrays.asList(
+                // Unwind the postings array
+                Aggregates.unwind("$postings"),
+                // Match postings where docID is in the input list
+                Aggregates.match(Filters.in("postings.docID", docIds)),
+                // Project to extract docID and types
+                Aggregates.project(new Document("_id", 0)
+                        .append("docID", "$postings.docID")
+                        .append("types", "$postings.types")),
+                // Convert types to an array of key-value pairs using $objectToArray
+                Aggregates.addFields(
+                        new Field<>("types", new Document("$objectToArray", "$types"))),
+                // Unwind the types array
+                Aggregates.unwind("$types"),
+                // Group by docID and field name, summing the frequencies
+                Aggregates.group(
+                        new Document("docID", "$docID").append("field", "$types.k"),
+                        Accumulators.sum("total", "$types.v")));
+
+        // Execute aggregation
+        try {
+            for (Document doc : invertedIndexCollection.aggregate(pipeline)) {
+                Document id = (Document) doc.get("_id");
+                int docId = id.getInteger("docID");
+                String field = id.getString("field");
+                int total = doc.getInteger("total");
+
+                result.computeIfAbsent(docId, k -> new HashMap<>()).put(field, total);
+            }
+        } catch (Exception e) {
+            System.out.println("Error in aggregation: " + e.getMessage());
+        }
+
+        // Ensure all input docIds are in the result, even if they have no postings
+        for (Integer docId : docIds) {
+            Map<String, Integer> fieldOccurrences = result.computeIfAbsent(docId, k -> new HashMap<>());
+            for (String field : fields) {
+                fieldOccurrences.putIfAbsent(field, 0);
+            }
+        }
+
+        return result;
+    }
+
+    public HashMap<String, Integer> getAllFieldsCount() {
+        HashMap<String, Integer> fieldCounts = new HashMap<>();
+        try {
+            Iterable<Document> results = invertedIndexCollection.aggregate(Arrays.asList(
+                    new Document("$unwind", "$postings"),
+                    new Document("$project", new Document("types", "$postings.types")),
+                    new Document("$addFields", new Document("typesArray", new Document("$objectToArray", "$types"))),
+                    new Document("$unwind", "$typesArray"),
+                    new Document("$match",
+                            new Document("typesArray.k", new Document("$in", Arrays.asList("h1", "h2", "a", "other")))),
+                    new Document("$group", new Document("_id", "$typesArray.k")
+                            .append("total", new Document("$sum", "$typesArray.v")))));
+
+            // Process the results into a map
+            for (Document result : results) {
+                String field = result.getString("_id");
+                Integer total = result.getInteger("total");
+                if (field != null && total != null) {
+                    fieldCounts.put(field, total);
+                }
+            }
+        } catch (MongoException e) {
+            System.err.println(e.getMessage());
             e.printStackTrace();
         }
-        return new ArrayList<>();
+        return fieldCounts;
+    }
+
+    public HashMap<String, List<Document>> getWordsPostings(List<String> words) {
+        HashMap<String, List<Document>> termPostings = new HashMap<>();
+        try {
+            // Query all words in bulk using $in
+            Iterable<Document> documents = invertedIndexCollection.find(
+                    Filters.in("word", words));
+            for (Document doc : documents) {
+                String term = doc.getString("word");
+                List<Document> postings = doc.getList("postings", Document.class);
+                termPostings.put(term, postings != null ? postings : Collections.emptyList());
+            }
+        } catch (MongoException e) {
+            System.err.println("Error retrieving postings: " + e.getMessage());
+            e.printStackTrace();
+        }
+        // Ensure all words are in the result, even if they have no postings
+        for (String word : words) {
+            termPostings.putIfAbsent(word, Collections.emptyList());
+        }
+        return termPostings;
+    }
+
+    public HashMap<Integer, Double> getPageRanks(List<Integer> docIds) {
+        HashMap<Integer, Double> docRanks = new HashMap<>();
+
+        try {
+            docCollection.find(Filters.in("id", docIds))
+                    .forEach(document -> {
+                        Integer id = document.getInteger("id");
+                        Double rank = document.getDouble("rank");
+                        if (id != null && rank != null) {
+                            docRanks.put(id, rank);
+                        }
+                    });
+        } catch (MongoException e) {
+            System.err.println(e.getMessage());
+            e.printStackTrace();
+        }
+
+        return docRanks;
     }
 
     // Retrieve all URLS in our db
