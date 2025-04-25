@@ -227,8 +227,8 @@ public class Ranker {
             }
         }
     }
-          
-              // this funcction has to fill relevanceScores and commonDocs
+
+    // this funcction has to fill relevanceScores and commonDocs
     void rankPhrase(String phrase) {
 
         String regex = new PhraseMatching().BuildStringRegex(phrase);
@@ -293,7 +293,7 @@ public class Ranker {
             }
         }
     }
-                  
+
     public static void main(String args[]) {
         ArrayList<String> terms = new ArrayList<>();
         terms.add("alyaa");

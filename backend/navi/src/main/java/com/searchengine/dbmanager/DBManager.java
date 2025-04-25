@@ -13,6 +13,7 @@ import org.springframework.data.mongodb.core.aggregation.ArrayOperators.In;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -175,22 +176,22 @@ public class DBManager {
         // Aggregation pipeline
         List<Bson> pipeline = Arrays.asList(
                 // Unwind the postings array
-                Aggregates.unwind("$postings"),
+                Aggregates.unwind(""),
                 // Match postings where docID is in the input list
                 Aggregates.match(Filters.in("postings.docID", docIds)),
                 // Project to extract docID and types
                 Aggregates.project(new Document("_id", 0)
-                        .append("docID", "$postings.docID")
-                        .append("types", "$postings.types")),
-                // Convert types to an array of key-value pairs using $objectToArray
+                        .append("docID", ".docID")
+                        .append("types", ".types")),
+                // Convert types to an array of key-value pairs using
                 Aggregates.addFields(
-                        new Field<>("types", new Document("$objectToArray", "$types"))),
+                        new Field<>("types", new Document("", ""))),
                 // Unwind the types array
-                Aggregates.unwind("$types"),
+                Aggregates.unwind(""),
                 // Group by docID and field name, summing the frequencies
                 Aggregates.group(
-                        new Document("docID", "$docID").append("field", "$types.k"),
-                        Accumulators.sum("total", "$types.v")));
+                        new Document("docID", "").append("field", ".k"),
+                        Accumulators.sum("total", ".v")));
 
         // Execute aggregation
         try {
@@ -221,14 +222,14 @@ public class DBManager {
         HashMap<String, Integer> fieldCounts = new HashMap<>();
         try {
             Iterable<Document> results = invertedIndexCollection.aggregate(Arrays.asList(
-                    new Document("$unwind", "$postings"),
-                    new Document("$project", new Document("types", "$postings.types")),
-                    new Document("$addFields", new Document("typesArray", new Document("$objectToArray", "$types"))),
-                    new Document("$unwind", "$typesArray"),
-                    new Document("$match",
-                            new Document("typesArray.k", new Document("$in", Arrays.asList("h1", "h2", "a", "other")))),
-                    new Document("$group", new Document("_id", "$typesArray.k")
-                            .append("total", new Document("$sum", "$typesArray.v")))));
+                    new Document("", ""),
+                    new Document("", new Document("types", ".types")),
+                    new Document("", new Document("typesArray", new Document("", ""))),
+                    new Document("", ""),
+                    new Document("",
+                            new Document("typesArray.k", new Document("", Arrays.asList("h1", "h2", "a", "other")))),
+                    new Document("", new Document("_id", ".k")
+                            .append("total", new Document("", ".v")))));
 
             // Process the results into a map
             for (Document result : results) {
@@ -248,7 +249,7 @@ public class DBManager {
     public HashMap<String, List<Document>> getWordsPostings(List<String> words) {
         HashMap<String, List<Document>> termPostings = new HashMap<>();
         try {
-            // Query all words in bulk using $in
+            // Query all words in bulk using
             Iterable<Document> documents = invertedIndexCollection.find(
                     Filters.in("word", words));
             for (Document doc : documents) {
