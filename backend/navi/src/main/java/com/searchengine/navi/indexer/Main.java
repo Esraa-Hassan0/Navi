@@ -54,31 +54,37 @@ public class Main {
 
         // Insert inverted index to the db
 
-        insertIntoInvertedIndex(invertedIndex);
+        long prevTime = System.currentTimeMillis();
 
+        db.insertIntoInvertedIndex(invertedIndex);
+        long currTime = System.currentTimeMillis();
+
+        long elapsedTime = currTime - prevTime;
+        // System.out.println();
+        System.out.println("Time taken to insert into db: " + elapsedTime + " ms");
         // Print for debugging issues
 
-        for (String word : invertedIndex.keySet()) {
-            Token token = invertedIndex.get(word);
-            for (Posting posting : token.getPostings()) {
-                System.out.print("Word: " + word + " -> DocId: " +
-                        posting.getDocID() + ", TF: " + posting.getTF() + ", Types: [");
-                // Print all positions
-                int i = 0;
+        // for (String word : invertedIndex.keySet()) {
+        // Token token = invertedIndex.get(word);
+        // for (Posting posting : token.getPostings()) {
+        // System.out.print("Word: " + word + " -> DocId: " +
+        // posting.getDocID() + ", TF: " + posting.getTF() + ", Types: [");
+        // // Print all positions
+        // int i = 0;
 
-                for (String type : posting.getTypeCounts().keySet()) {
-                    int count = posting.getTypeCounts().get(type);
+        // for (String type : posting.getTypeCounts().keySet()) {
+        // int count = posting.getTypeCounts().get(type);
 
-                    System.out.print("{type: " + type + " ,count: " + count + "}");
-                    if (i < posting.getTypeCounts().size() - 1) {
-                        System.out.print(",");
+        // System.out.print("{type: " + type + " ,count: " + count + "}");
+        // if (i < posting.getTypeCounts().size() - 1) {
+        // System.out.print(",");
 
-                    }
-                    i++;
-                }
-                System.out.println("]");
-            }
-        }
+        // }
+        // i++;
+        // }
+        // System.out.println("]");
+        // }
+        // }
 
     }
 
