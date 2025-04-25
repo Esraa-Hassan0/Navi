@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Element;
@@ -57,7 +58,7 @@ public class Indexer {
         }
     }
 
-    public HashMap<String, Token> tokenizeDocument(Document doc, HashMap<String, Token> tokenMap) {
+    public ConcurrentHashMap<String, Token> tokenizeDocument(Document doc, ConcurrentHashMap<String, Token> tokenMap) {
         String url = doc.location();
         int docId = dbmanager.retrieveDocID(url);
         String text = doc.text();
@@ -83,7 +84,7 @@ public class Indexer {
         return tokenMap;
     }
 
-    public void tokenizeText(String text, HashMap<String, Token> tokenMap, int docId, String type) {
+    public void tokenizeText(String text, ConcurrentHashMap<String, Token> tokenMap, int docId, String type) {
         String restructureText = text.toLowerCase().replaceAll("[^a-zA-Z0-9\\s]", "");
         String[] arrList = restructureText.split("\\s+");
         System.out.println(TEAL + "Tokens before filtering (" + type + "): " + Arrays.toString(arrList) + RESET);

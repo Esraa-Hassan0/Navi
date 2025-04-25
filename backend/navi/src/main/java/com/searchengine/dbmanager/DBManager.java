@@ -10,6 +10,7 @@ import org.slf4j.LoggerFactory;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -65,7 +66,9 @@ public class DBManager {
 
     public DBManager() {
         if (mongoClient == null) { // Ensure only one connection is created
-            String connectionString = "mongodb+srv://esraa:navi123searchengine@cluster0.adp56.mongodb.net/";
+            // String connectionString =
+            // "mongodb+srv://esraa:navi123searchengine@cluster0.adp56.mongodb.net/";
+            String connectionString = "mongodb://localhost:27017/"; // Local MongoDB connection string
             ServerApi serverApi = ServerApi.builder()
                     .version(ServerApiVersion.V1)
                     .build();
@@ -239,7 +242,7 @@ public class DBManager {
     // Insert Inverted Index to the db
 
     // For now it is limited to 10 docs till we finalize our structure
-    public void insertIntoInvertedIndex(HashMap<String, Token> invertedIndex) {
+    public void insertIntoInvertedIndex(ConcurrentHashMap<String, Token> invertedIndex) {
         List<WriteModel<Document>> bulkOperations = new ArrayList<>();
         int insertCount = 0;
         int updateCount = 0;
