@@ -105,8 +105,28 @@
   <artifactId>snowball-stemmer</artifactId>
   <version>1.3.0.581.1</version>
 </dependency>
+    		<dependency>
+    			<groupId>com.github.crawler-commons</groupId>
+    			<artifactId>crawler-commons</artifactId>
+    			<version>1.3</version> <!-- or latest -->
+	    	</dependency>
 
-  </dependencies>
+
+
+<!-- 
+	<build>
+		<plugins>
+  			<plugin>
+    			<groupId>org.codehaus.mojo</groupId>
+    			<artifactId>exec-maven-plugin</artifactId>
+    			<version>3.1.0</version>
+    			<configuration>
+      				<mainClass>com.searchengine.navi.crawler.MainCrawler</mainClass>
+    			</configuration>
+  			</plugin>
+		</plugins>
+
+	</build> -->
 
   <build>
     <plugins>

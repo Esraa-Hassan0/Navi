@@ -1,10 +1,14 @@
 package com.searchengine.navi.Ranker;
 
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.lang.Math;
 import com.searchengine.dbmanager.DBManager;
+import com.searchengine.navi.queryengine.PhraseMatching;
 
 import org.bson.Document;
+import org.jsoup.Jsoup;
 import org.springframework.data.mongodb.core.aggregation.ArrayOperators.In;
 
 public class Ranker {
@@ -14,142 +18,294 @@ public class Ranker {
     static final String RED = "\u001B[31m";
     static final String GREEN = "\u001B[32m";
     static final String PURPLE = "\u001B[35m";
-    private double k = 1.5, b = 0.75;
-    private double[] avgDocFieldsLengths;
-    private String[] fields = { "h1", "h2", "a", "other" };
-    private double[] weight = { 2.5, 2, 1.5, 1 };
     private int docsCount;
     private ArrayList<String> terms;
     private HashMap<Integer, Double> scores;
+    private HashMap<Integer, Double> relevanceScores;
+    private HashMap<Integer, Double> popularityScores;
     private HashSet<Integer> commonDocs;
+    private double relWeight = 0.7;
+    private double popWeight = 0.3;
+
+    // Phrase matching
+
+    private boolean isPhrase = false;
+    private String phrase = "";
 
     static DBManager dbManager;
 
-    enum Field {
-        h1,
-        h2,
-        a,
-        other
-    }
-
-    public Ranker(ArrayList<String> queryTerms) {
+    public Ranker(ArrayList<String> queryTerms, String phrase, boolean isPhrase) {
         terms = queryTerms;
         dbManager = new DBManager();
         scores = new HashMap<>();
+        relevanceScores = new HashMap<>();
+        popularityScores = new HashMap<>();
         commonDocs = new HashSet<>();
-        avgDocFieldsLengths = new double[4];
-        for (int i = 0; i < 4; i++) {
-            avgDocFieldsLengths[i] = dbManager.getAvgFieldLength(fields[i]);
-        }
+
         docsCount = dbManager.getDocumentsCount();
         System.out.println(GREEN + "Docs No.: " + docsCount + RESET);
+
+        // phrase matching
+
+        this.phrase = phrase;
+        this.isPhrase = isPhrase;
     }
-    
-    public List<Integer> sortDocs() {
-        List<Integer> sortedDocs = new ArrayList<>(commonDocs);
-        sortedDocs.sort((id1, id2) -> Double.compare(scores.get(id2), scores.get(id1)));
-        return sortedDocs;
-    }
 
-    void BM25F() {
-        HashMap<Integer, ArrayList<Integer>> docFieldLength = new HashMap<>();
+    void rank() {
+        Relevance relevance = new Relevance();
+        Popularity popularity = new Popularity();
 
-        // Loop over query terms
-        for (String term : terms) {
-            System.out.println(YELLOW + "in terms" + RESET);
-
-            double IDF = getIDF(term);
-            System.out.println(GREEN + "IDF: " + IDF + RESET);
-
-            // Get postings of the term
-            List<Document> postings = dbManager.getWordPostings(term);
-
-            // Loop over each posting
-            for (Document posting : postings) {
-                int docId = posting.getInteger("docID");
-
-                commonDocs.add(docId);
-                System.out.println(RED + "in doc " + docId + RESET);
-
-                // Loop over fields
-                boolean calculated = true;
-                if (!docFieldLength.containsKey(docId) || docFieldLength.get(docId) == null) {
-                    calculated = false;
-                    ArrayList<Integer> lengths = new ArrayList<>();
-                    docFieldLength.put(docId, lengths);
-                }
-                for (int i = 0; i < 4; i++) {
-                    System.out.println(PURPLE + "in fields" + RESET);
-
-                    if (!calculated) {
-                        int length = dbManager.getFieldLengthPerDoc(docId, fields[i]);
-                        docFieldLength.get(docId).add(length);
-                    }
-                    System.out.println(GREEN + fields[i] + " length: " + docFieldLength.get(docId).get(i) + RESET);
-
-                    Document types = (Document) posting.get("types");
-
-                    int TF = types.getInteger(fields[i], 0);
-                    System.out.println(GREEN + "TF: " + TF + RESET);
-
-                    double score = calculateBM25FByTerm(term, docFieldLength.get(docId).get(i), TF, i, IDF);
-                    System.out.println(GREEN + "Score: " + score + RESET);
-
-                    scores.put(docId, scores.getOrDefault(docId, 0.0) + score);
-                }
-            }
+        if (isPhrase) {
+            rankPhrase(phrase);
+        } else {
+            relevance.BM25F();
         }
-    }
 
-    double calculateBM25FByTerm(String word, int docLength, int TF, int field, double IDF) {
-        double result = 0;
-        result = weight[field] * IDF * (TF * (k + 1) / (TF + k * (1 - b + b * (docLength
-                / avgDocFieldsLengths[field]))));
-        return result;
-    }
+        popularity.PageRank();
 
-    public void test() {
-        BM25F();
+        for (int doc : commonDocs) {
+            double score = relWeight * relevanceScores.getOrDefault(doc, 0.0)
+                    + popWeight * popularityScores.getOrDefault(doc, 0.0);
+            scores.put(doc, score);
+        }
         for (int doc : commonDocs) {
             System.out.println("docId: " + doc + "score: " + scores.get(doc));
         }
     }
 
-    double getIDF(String word) {
-        int DF = dbManager.getDF(word);
+    public List<Integer> sortDocs() {
+        long startTime = System.nanoTime();
 
-        System.out.println(GREEN + "DF: " + DF + RESET);
+        rank();
+        List<Integer> sortedDocs = new ArrayList<>(commonDocs);
+        sortedDocs.sort((id1, id2) -> Double.compare(scores.get(id2), scores.get(id1)));
 
-        double IDF = Math.log10((docsCount - DF + 0.5) / (DF + 0.5));
-        return IDF;
+        long endTime = System.nanoTime();
+
+        long durationInNano = endTime - startTime;
+        double durationInMillis = durationInNano / 1_000_000.0;
+
+        System.out.println("Time taken: " + durationInMillis + " ms");
+        return sortedDocs;
     }
 
-    double getAvgFieldLength() {
-        return 0;
+    class Relevance {
+        private double k = 1.5, b = 0.75;
+        private double[] avgDocFieldsLengths;
+        private String[] fields = { "h1", "h2", "a", "other" };
+        private double[] weight = { 2.5, 2, 1.5, 1 };
+        HashMap<String, Double> IDFs;
+        private HashMap<String, List<Document>> termPostings;
+        Map<Integer, Map<String, Integer>> docFieldLengths;
+
+        Relevance() {
+            IDFs = new HashMap<>();
+            avgDocFieldsLengths = new double[4];
+            HashMap<String, Integer> fieldCounts = dbManager.getAllFieldsCount();
+
+            for (int i = 0; i < 4; i++) {
+                avgDocFieldsLengths[i] = fieldCounts.get(fields[i]) / (double) docsCount;
+            }
+        }
+
+        void initializeRankParams() {
+            long startTime = System.nanoTime();
+
+            getIDFs();
+            termPostings = dbManager.getWordsPostings(terms);
+
+            for (String term : terms) {
+                List<Document> postings = termPostings.get(term);
+
+                // Add documents in common documents
+                for (Document posting : postings) {
+                    int docId = posting.getInteger("docID");
+
+                    commonDocs.add(docId);
+                }
+            }
+
+            // Calculate all docsFieldLengths
+            docFieldLengths = dbManager.getFieldOccurrencesForDocs(new ArrayList<>(commonDocs));
+
+            for (int doc : commonDocs) {
+                for (String field : fields) {
+                    System.out.println("doc " + field + " length: " + docFieldLengths.get(doc).get(field));
+                }
+            }
+            long endTime = System.nanoTime();
+
+            long durationInNano = endTime - startTime;
+            double durationInMillis = durationInNano / 1_000_000.0;
+
+            System.out.println("Time taken: " + durationInMillis + " ms");
+        }
+
+        void BM25F() {
+            // HashMap<Integer, ArrayList<Integer>> docFieldLength = new HashMap<>();
+            initializeRankParams();
+
+            // Loop over query terms
+            for (String term : terms) {
+                System.out.println(YELLOW + "in terms" + RESET);
+                Double IDF = IDFs.get(term);
+                IDFs.put(term, IDF);
+
+                if (IDF == null) {
+                    continue;
+                }
+
+                System.out.println(GREEN + "IDF: " + IDF + RESET);
+
+                // Get postings of the term
+                List<Document> postings = termPostings.get(term);
+
+                // Loop over each posting
+                for (Document posting : postings) {
+                    int docId = posting.getInteger("docID");
+
+                    commonDocs.add(docId);
+                    System.out.println(RED + "in doc " + docId + RESET);
+
+                    double totalScore = 0.0;
+
+                    for (int i = 0; i < 4; i++) {
+                        System.out.println(PURPLE + "in fields" + RESET);
+
+                        System.out.println(
+                                GREEN + fields[i] + " length: " + docFieldLengths.get(docId).get(fields[i]) + RESET);
+
+                        Document types = (Document) posting.get("types");
+
+                        int TF = types.getInteger(fields[i], 0);
+                        System.out.println(GREEN + "TF: " + TF + RESET);
+
+                        if (TF < 1) {
+                            continue;
+                        }
+
+                        double score = calculateFieldScore(docFieldLengths.get(docId).get(fields[i]), TF, i, IDF);
+                        totalScore += score;
+                        System.out.println(GREEN + "Score: " + score + RESET);
+
+                    }
+                    relevanceScores.put(docId, totalScore);
+                }
+            }
+        }
+
+        double calculateFieldScore(int docLength, int TF, int field, double IDF) {
+            double score = weight[field] * IDF * (TF * (k + 1) / (TF + k * (1 - b + b * (docLength
+                    / avgDocFieldsLengths[field]))));
+            return score;
+        }
+
+        void getIDFs() {
+            HashMap<String, Integer> DFs = dbManager.getDFs(terms);
+
+            for (String term : terms) {
+                int DF = DFs.get(term);
+                Double IDF;
+                if (DF == -1) {
+                    IDF = null;
+                } else {
+                    IDF = Math.log10((docsCount - DF + 0.5) / (DF + 0.5));
+                }
+
+                System.out.println(GREEN + "DF: " + DF + RESET);
+
+                IDFs.put(term, IDF);
+            }
+        }
     }
 
-    double getDocPopularity() {
-        return 0;
+    class Popularity {
+        void PageRank() {
+            popularityScores = dbManager.getPageRanks(new ArrayList<>(commonDocs));
+            for (int docId : commonDocs) {
+                System.out.println(GREEN + "doc: " + docId + " pageRank: " + popularityScores.get(docId) + RESET);
+            }
+        }
     }
+          
+              // this funcction has to fill relevanceScores and commonDocs
+    void rankPhrase(String phrase) {
 
+        String regex = new PhraseMatching().BuildStringRegex(phrase);
+        Pattern pattern = Pattern.compile(regex);
+
+        // Define weights
+        Map<String, Double> fieldWeights = Map.of(
+                "h1", 2.5,
+                "h2", 2.0,
+                "a", 1.5,
+                "body", 1.0 // fallback field
+        );
+
+        ArrayList<Document> docs = dbManager.getDocumentsContent();
+
+        for (Document doc : docs) {
+            Integer docId = doc.getInteger("id");
+            String url = doc.getString("url");
+
+            if (docId == null || url == null || url.isEmpty()) {
+                continue;
+            }
+            // To be replaced after hagar put them in the database
+            try {
+                org.jsoup.nodes.Document jsoupDoc = Jsoup.connect(url).get(); // fetch HTML from URL
+                double score = 0.0;
+
+                // Debug output
+                System.out.println(PURPLE + jsoupDoc.text() + " ==========TEXT===========" + RESET);
+                System.out.println(GREEN + jsoupDoc.select("h1,h2").text() + " =========H1============" + RESET);
+
+                for (Map.Entry<String, Double> entry : fieldWeights.entrySet()) {
+                    String tag = entry.getKey();
+                    double weight = entry.getValue();
+
+                    String fieldText = tag.equals("body") ? jsoupDoc.body().text() : jsoupDoc.select(tag).text();
+                    fieldText = fieldText.toLowerCase().trim().replaceAll("\\s+", " ");
+
+                    Matcher matcher = pattern.matcher(fieldText);
+                    int freq = 0;
+                    while (matcher.find()) {
+                        freq++;
+                    }
+
+                    String[] fieldWords = fieldText.split("\\s+");
+                    int fieldLength = fieldWords.length;
+
+                    // If the field length is greater than 0, compute score
+                    if (fieldLength > 0) {
+                        double fieldScore = weight * ((double) freq / fieldLength);
+                        score += fieldScore;
+                    }
+                }
+
+                if (score > 0.0) {
+                    relevanceScores.put(docId, score);
+                    commonDocs.add(docId);
+                }
+
+            } catch (Exception e) {
+                System.out.println(RED + "Error fetching HTML for URL: " + url + " — " + e.getMessage() + RESET);
+            }
+        }
+    }
+                  
     public static void main(String args[]) {
         ArrayList<String> terms = new ArrayList<>();
-        terms.add("your");
-        terms.add("branch");
+        terms.add("alyaa");
+        terms.add("hi");
+        terms.add("hey");
+        terms.add("lolo");
         Ranker r = new Ranker(terms);
 
-        r.test();
         List<Integer> docs = r.sortDocs();
         for (int doc : docs) {
             System.out.println(doc);
         }
-        // double count = dbManager.getAvgFieldLength("h1");
-        // double count2 = dbManager.getAvgFieldLength("h2");
-        // double count3 = dbManager.getAvgFieldLength("a");
-        // double count4 = dbManager.getAvgFieldLength("other");
-        // System.out.println("count h1: " + count);
-        // System.out.println("count h2: " + count2);
-        // System.out.println("count a: " + count3);
-        // System.out.println("count other: " + count4);
+
     }
 }
