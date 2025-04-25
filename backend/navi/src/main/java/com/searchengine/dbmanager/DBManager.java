@@ -231,7 +231,7 @@ public class DBManager {
         // First, fetch all existing words to check what's already in the database
         Set<String> wordsToProcess = invertedIndex.keySet();
         MongoCursor<Document> existingDocs = invertedIndexCollection
-                .find(new Document("word", new Document("", new ArrayList<>(wordsToProcess))))
+                .find(new Document("word", new Document("$in", new ArrayList<>(wordsToProcess))))
                 .iterator();
 
         // Create a map of existing words for quick lookup
@@ -305,7 +305,7 @@ public class DBManager {
                 bulkOperations.add(
                         new UpdateOneModel<>(
                                 new Document("word", word),
-                                new Document("", new Document("postings", updatedPostings))));
+                                new Document("$set", new Document("postings", updatedPostings))));
                 updateCount++;
             } else {
                 // Word doesn't exist, prepare insert operation
