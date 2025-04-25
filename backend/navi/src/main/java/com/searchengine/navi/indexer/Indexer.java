@@ -139,40 +139,42 @@ public class Indexer {
         dbmanager.close();
     }
 
-    public static void main(String[] args) {
+    // Just for debugging purposes
+    // public static void main(String[] args) {
 
-        System.out.println(GREEN + "Starting tokenization..." + RESET);
-        try {
-            Document doc = Jsoup.connect("https://toolsfairy.com/code-test/sample-html-files#").get();
-            Indexer indexer = new Indexer();
-            HashMap<String, Token> tokenMap = new HashMap<>();
-            tokenMap = indexer.tokenizeDocument(doc, tokenMap);
+    // System.out.println(GREEN + "Starting tokenization..." + RESET);
+    // try {
+    // Document doc =
+    // Jsoup.connect("https://toolsfairy.com/code-test/sample-html-files#").get();
+    // Indexer indexer = new Indexer();
+    // HashMap<String, Token> tokenMap = new HashMap<>();
+    // tokenMap = indexer.tokenizeDocument(doc, tokenMap);
 
-            System.out.println(GREEN + "Tokenized Words:" + RESET);
-            if (tokenMap.isEmpty()) {
-                System.out.println("No tokens found.");
-            } else {
-                for (String word : tokenMap.keySet()) {
-                    Token token = tokenMap.get(word);
-                    Posting posting = token.getPostings().get(0);
-                    System.out.print(GREEN + "Word: " + word + RESET + " ->   DocId: " +
-                            posting.getDocID() + ", TF: " + posting.getTF() + ", Types: {");
-                    Map<String, Integer> typeMap = posting.getTypeCounts();
-                    int i = 0;
-                    for (Map.Entry<String, Integer> entry : typeMap.entrySet()) {
-                        System.out.print(entry.getKey() + ": " + entry.getValue());
-                        if (i < typeMap.size() - 1) {
-                            System.out.print(", ");
-                        }
-                        i++;
-                    }
-                    System.out.println("}");
-                }
-            }
-            indexer.close();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        System.out.println(GREEN + "Done." + RESET);
-    }
+    // System.out.println(GREEN + "Tokenized Words:" + RESET);
+    // if (tokenMap.isEmpty()) {
+    // System.out.println("No tokens found.");
+    // } else {
+    // for (String word : tokenMap.keySet()) {
+    // Token token = tokenMap.get(word);
+    // Posting posting = token.getPostings().get(0);
+    // System.out.print(GREEN + "Word: " + word + RESET + " -> DocId: " +
+    // posting.getDocID() + ", TF: " + posting.getTF() + ", Types: {");
+    // Map<String, Integer> typeMap = posting.getTypeCounts();
+    // int i = 0;
+    // for (Map.Entry<String, Integer> entry : typeMap.entrySet()) {
+    // System.out.print(entry.getKey() + ": " + entry.getValue());
+    // if (i < typeMap.size() - 1) {
+    // System.out.print(", ");
+    // }
+    // i++;
+    // }
+    // System.out.println("}");
+    // }
+    // }
+    // indexer.close();
+    // } catch (Exception e) {
+    // e.printStackTrace();
+    // }
+    // System.out.println(GREEN + "Done." + RESET);
+    // }
 }
