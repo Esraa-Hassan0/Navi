@@ -30,6 +30,7 @@ import com.mongodb.ServerApiVersion;
 import com.mongodb.bulk.BulkWriteError;
 import com.mongodb.bulk.BulkWriteResult;
 import com.mongodb.client.AggregateIterable;
+import com.mongodb.client.FindIterable;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoCollection;
@@ -351,6 +352,24 @@ public class DBManager {
         }
     }
 
+    // Fetch all content when is_indexed is false
+
+    public FindIterable<Document> getUnindexedDocuments() {
+        Document filter = new Document("isIndexed", false);
+        Document projection = new Document("content", 1).append("h1", 1).append("h2", 1).append("children", 1).append(
+                "url",
+                1);
+        FindIterable<Document> result = docCollection.find(filter).projection(projection);
+
+        if (result != null) {
+            return result;
+        } else {
+            System.out.println("No unindexed documents found.");
+            return null;
+        }
+
+    }
+
     public void getDocContentBy(String url, int id) {
 
     }
@@ -488,6 +507,10 @@ public class DBManager {
     public static void main(String[] args) {
         // Initialize DBManager
         DBManager dbManager = new DBManager();
+        FindIterable<Document> urls = dbManager.getUnindexedDocuments();
+        for (Document doc : urls) {
+            System.out.println(doc);
+        }
 
         // Close the connection
         dbManager.close();

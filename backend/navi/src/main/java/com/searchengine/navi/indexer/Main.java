@@ -6,7 +6,9 @@ import java.util.HashMap;
 
 import org.bson.Document;
 import org.jsoup.Jsoup;
+//import org.jsoup.nodes.Document;
 
+import com.mongodb.client.FindIterable;
 import com.searchengine.dbmanager.DBManager;
 import com.searchengine.navi.indexer.Indexer.Token;
 
@@ -23,29 +25,20 @@ public class Main {
     static DBManager db = new DBManager();
     static Indexer indexer = new Indexer();
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
         // Retrieve urls from db ->doc
-        ArrayList<Document> urls = db.retriveURLs();
+        FindIterable<Document> docs = db.getUnindexedDocuments();
         HashMap<String, Token> invertedIndex = new HashMap<>();
 
         // Loop over them and call tokenize
-        for (Document doc : urls) {
-            String url = doc.getString("url");
+        for (Document doc : docs) {
 
+            // System.out.println(document.text());
             try {
-                org.jsoup.nodes.Document document = Jsoup.connect(url).get();
+                indexer.tokenizeDocument(doc, invertedIndex);
+                System.out.println(doc);
 
-                // System.out.println(document.text());
-                try {
-                    indexer.tokenizeDocument(document, invertedIndex);
-                    System.out.println(url);
-
-                } catch (Exception e) {
-                    // TODO Auto-generated catch block
-                    e.printStackTrace();
-                }
-
-            } catch (IOException e) {
+            } catch (Exception e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();
             }
