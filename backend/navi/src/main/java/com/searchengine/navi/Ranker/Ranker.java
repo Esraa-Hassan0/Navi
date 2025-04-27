@@ -10,6 +10,7 @@ import com.searchengine.navi.queryengine.PhraseMatching;
 import org.bson.Document;
 import org.jsoup.Jsoup;
 import org.springframework.data.mongodb.core.aggregation.ArrayOperators.In;
+import org.bson.types.ObjectId;
 
 public class Ranker {
     static final String RESET = "\u001B[0m";
@@ -20,10 +21,10 @@ public class Ranker {
     static final String PURPLE = "\u001B[35m";
     private int docsCount;
     private ArrayList<String> terms;
-    private HashMap<Integer, Double> scores;
-    private HashMap<Integer, Double> relevanceScores;
-    private HashMap<Integer, Double> popularityScores;
-    private HashSet<Integer> commonDocs;
+    private HashMap<ObjectId, Double> scores;
+    private HashMap<ObjectId, Double> relevanceScores;
+    private HashMap<ObjectId, Double> popularityScores;
+    private HashSet<ObjectId> commonDocs;
     private double relWeight = 0.7;
     private double popWeight = 0.3;
 
@@ -56,28 +57,28 @@ public class Ranker {
         Popularity popularity = new Popularity();
 
         if (isPhrase) {
-            rankPhrase(phrase);
+            // rankPhrase(phrase);
         } else {
             relevance.BM25F();
         }
 
         popularity.PageRank();
 
-        for (int doc : commonDocs) {
+        for (ObjectId doc : commonDocs) {
             double score = relWeight * relevanceScores.getOrDefault(doc, 0.0)
                     + popWeight * popularityScores.getOrDefault(doc, 0.0);
             scores.put(doc, score);
         }
-        for (int doc : commonDocs) {
-            System.out.println("docId: " + doc + "score: " + scores.get(doc));
+        for (ObjectId doc : commonDocs) {
+            System.out.println(TEAL + "docId: " + doc + " score: " + scores.get(doc) + RESET);
         }
     }
 
-    public List<Integer> sortDocs() {
+    public List<ObjectId> sortDocs() {
         long startTime = System.nanoTime();
 
         rank();
-        List<Integer> sortedDocs = new ArrayList<>(commonDocs);
+        List<ObjectId> sortedDocs = new ArrayList<>(commonDocs);
         sortedDocs.sort((id1, id2) -> Double.compare(scores.get(id2), scores.get(id1)));
 
         long endTime = System.nanoTime();
@@ -96,7 +97,7 @@ public class Ranker {
         private double[] weight = { 2.5, 2, 1.5, 1 };
         HashMap<String, Double> IDFs;
         private HashMap<String, List<Document>> termPostings;
-        Map<Integer, Map<String, Integer>> docFieldLengths;
+        Map<ObjectId, Map<String, Integer>> docFieldLengths;
 
         Relevance() {
             IDFs = new HashMap<>();
@@ -104,7 +105,7 @@ public class Ranker {
             HashMap<String, Integer> fieldCounts = dbManager.getAllFieldsCount();
 
             for (int i = 0; i < 4; i++) {
-                avgDocFieldsLengths[i] = fieldCounts.get(fields[i]) / (double) docsCount;
+                avgDocFieldsLengths[i] = fieldCounts.getOrDefault(fields[i], 0) / (double) docsCount;
             }
         }
 
@@ -119,7 +120,7 @@ public class Ranker {
 
                 // Add documents in common documents
                 for (Document posting : postings) {
-                    int docId = posting.getInteger("docID");
+                    ObjectId docId = posting.getObjectId("docID");
 
                     commonDocs.add(docId);
                 }
@@ -128,7 +129,7 @@ public class Ranker {
             // Calculate all docsFieldLengths
             docFieldLengths = dbManager.getFieldOccurrencesForDocs(new ArrayList<>(commonDocs));
 
-            for (int doc : commonDocs) {
+            for (ObjectId doc : commonDocs) {
                 for (String field : fields) {
                     System.out.println("doc " + field + " length: " + docFieldLengths.get(doc).get(field));
                 }
@@ -162,7 +163,7 @@ public class Ranker {
 
                 // Loop over each posting
                 for (Document posting : postings) {
-                    int docId = posting.getInteger("docID");
+                    ObjectId docId = posting.getObjectId("docID");
 
                     commonDocs.add(docId);
                     System.out.println(RED + "in doc " + docId + RESET);
@@ -222,7 +223,7 @@ public class Ranker {
     class Popularity {
         void PageRank() {
             popularityScores = dbManager.getPageRanks(new ArrayList<>(commonDocs));
-            for (int docId : commonDocs) {
+            for (ObjectId docId : commonDocs) {
                 System.out.println(GREEN + "doc: " + docId + " pageRank: " + popularityScores.get(docId) + RESET);
             }
         }
@@ -245,7 +246,7 @@ public class Ranker {
         ArrayList<Document> docs = dbManager.getDocumentsContent();
 
         for (Document doc : docs) {
-            Integer docId = doc.getInteger("id");
+            ObjectId docId = doc.getObjectId("_id");
             String url = doc.getString("url");
 
             if (docId == null || url == null || url.isEmpty()) {
@@ -257,8 +258,9 @@ public class Ranker {
                 double score = 0.0;
 
                 // Debug output
-                System.out.println(PURPLE + jsoupDoc.text() + " ==========TEXT===========" + RESET);
-                System.out.println(GREEN + jsoupDoc.select("h1,h2").text() + " =========H1============" + RESET);
+                System.out.println(PURPLE + jsoupDoc.text() + " ==========TEXT===========" +
+                        RESET);
+                System.out.println(GREEN + jsoupDoc.select("h1,h2").text() + "=========H1============" + RESET);
 
                 for (Map.Entry<String, Double> entry : fieldWeights.entrySet()) {
                     String tag = entry.getKey();
@@ -289,7 +291,8 @@ public class Ranker {
                 }
 
             } catch (Exception e) {
-                System.out.println(RED + "Error fetching HTML for URL: " + url + " — " + e.getMessage() + RESET);
+                System.out.println(RED + "Error fetching HTML for URL: " + url + " — " +
+                        e.getMessage() + RESET);
             }
         }
     }
@@ -300,10 +303,10 @@ public class Ranker {
         terms.add("hi");
         terms.add("hey");
         terms.add("lolo");
-        Ranker r = new Ranker(terms);
+        Ranker r = new Ranker(terms, "hi there", false);
 
-        List<Integer> docs = r.sortDocs();
-        for (int doc : docs) {
+        List<ObjectId> docs = r.sortDocs();
+        for (ObjectId doc : docs) {
             System.out.println(doc);
         }
 

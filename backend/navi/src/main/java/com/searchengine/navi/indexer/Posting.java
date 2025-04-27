@@ -3,12 +3,14 @@ package com.searchengine.navi.indexer;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.bson.types.ObjectId;
+
 public class Posting {
-    private int docId;
+    private ObjectId docId;
     private int tf;
     private Map<String, Integer> type;
 
-    public Posting(int docId) {
+    public Posting(ObjectId docId) {
         this.docId = docId;
         this.tf = 0;
         this.type = new HashMap<>();
@@ -28,7 +30,7 @@ public class Posting {
         this.tf = tf;
     }
 
-    public int getDocID() {
+    public ObjectId getDocID() {
         return docId;
     }
 

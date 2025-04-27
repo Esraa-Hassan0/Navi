@@ -99,34 +99,34 @@ public class DBManager {
      * @param url The URL to search for
      * @return The _id as a String, or null if no document is found
      */
-    public int retrieveDocID(String url) {
+    public ObjectId retrieveDocID(String url) {
         try {
             Document filter = new Document("url", url);
             Document result = docCollection.find(filter)
-                    .projection(new Document("id", 1)) // Fetch "id" field
+                    .projection(new Document("i_d", 1)) // Fetch "id" field
                     .first();
 
             if (result != null) {
-                Integer id = result.getInteger("id"); // Get "id" as Integer
+                ObjectId id = result.getObjectId("_id"); // Get "id" as Integer
                 if (id != null) {
                     return id; // Return as int
                 } else {
                     System.out.println("No 'id' field found for url: " + url);
-                    return -1;
+                    return null;
                 }
             } else {
                 System.out.println("No document found with url: " + url);
-                return -1;
+                return null;
             }
         } catch (MongoException e) {
             System.err.println("Error retrieving document ID: " + e.getMessage());
             e.printStackTrace();
-            return -1;
+            return null;
         }
     }
 
-    public List<Document> getDocumentsByID(List<Integer> ids) {
-        return docCollection.find(Filters.in("id", ids)).into(new ArrayList<>());
+    public List<Document> getDocumentsByID(List<ObjectId> ids) {
+        return docCollection.find(Filters.in("_id", ids)).into(new ArrayList<>());
     }
 
     public int getDocumentsCount() {
@@ -169,8 +169,8 @@ public class DBManager {
         return dfMap;
     }
 
-    public Map<Integer, Map<String, Integer>> getFieldOccurrencesForDocs(List<Integer> docIds) {
-        Map<Integer, Map<String, Integer>> result = new HashMap<>();
+    public Map<ObjectId, Map<String, Integer>> getFieldOccurrencesForDocs(List<ObjectId> docIds) {
+        Map<ObjectId, Map<String, Integer>> result = new HashMap<>();
         String fields[] = { "h1", "h2", "a", "other" };
 
         // Aggregation pipeline
@@ -197,7 +197,7 @@ public class DBManager {
         try {
             for (Document doc : invertedIndexCollection.aggregate(pipeline)) {
                 Document id = (Document) doc.get("_id");
-                int docId = id.getInteger("docID");
+                ObjectId docId = id.getObjectId("docID");
                 String field = id.getString("field");
                 int total = doc.getInteger("total");
 
@@ -208,7 +208,7 @@ public class DBManager {
         }
 
         // Ensure all input docIds are in the result, even if they have no postings
-        for (Integer docId : docIds) {
+        for (ObjectId docId : docIds) {
             Map<String, Integer> fieldOccurrences = result.computeIfAbsent(docId, k -> new HashMap<>());
             for (String field : fields) {
                 fieldOccurrences.putIfAbsent(field, 0);
@@ -222,14 +222,14 @@ public class DBManager {
         HashMap<String, Integer> fieldCounts = new HashMap<>();
         try {
             Iterable<Document> results = invertedIndexCollection.aggregate(Arrays.asList(
-                    new Document("", ""),
-                    new Document("", new Document("types", ".types")),
-                    new Document("", new Document("typesArray", new Document("", ""))),
-                    new Document("", ""),
-                    new Document("",
-                            new Document("typesArray.k", new Document("", Arrays.asList("h1", "h2", "a", "other")))),
-                    new Document("", new Document("_id", ".k")
-                            .append("total", new Document("", ".v")))));
+                    new Document("$unwind", "$postings"),
+                    new Document("$project", new Document("types", "$postings.types")),
+                    new Document("$addFields", new Document("typesArray", new Document("$objectToArray", "$types"))),
+                    new Document("$unwind", "$typesArray"),
+                    new Document("$match",
+                            new Document("typesArray.k", new Document("$in", Arrays.asList("h1", "h2", "a", "other")))),
+                    new Document("$group", new Document("_id", "$typesArray.k")
+                            .append("total", new Document("$sum", "$typesArray.v")))));
 
             // Process the results into a map
             for (Document result : results) {
@@ -268,13 +268,13 @@ public class DBManager {
         return termPostings;
     }
 
-    public HashMap<Integer, Double> getPageRanks(List<Integer> docIds) {
-        HashMap<Integer, Double> docRanks = new HashMap<>();
+    public HashMap<ObjectId, Double> getPageRanks(List<ObjectId> docIds) {
+        HashMap<ObjectId, Double> docRanks = new HashMap<>();
 
         try {
-            docCollection.find(Filters.in("id", docIds))
+            docCollection.find(Filters.in("_id", docIds))
                     .forEach(document -> {
-                        Integer id = document.getInteger("id");
+                        ObjectId id = document.getObjectId("_id");
                         Double rank = document.getDouble("rank");
                         if (id != null && rank != null) {
                             docRanks.put(id, rank);
@@ -328,7 +328,7 @@ public class DBManager {
             for (Posting posting : token.getPostings()) {
                 Map<String, Integer> typesMap = posting.getTypeCounts();
                 Document postingDoc = new Document()
-                        .append("docID", posting.getDocID())
+                        .append("docID", posting.getDocID()) // Must be ObjectId
                         .append("TF", posting.getTF())
                         .append("types", typesMap);
 
@@ -343,15 +343,15 @@ public class DBManager {
                 List<Document> existingPostings = (List<Document>) existingDoc.get("postings");
 
                 // Create a map of existing postings by docID for quick lookup
-                Map<Integer, Document> docIdToPosting = new HashMap<>();
+                Map<ObjectId, Document> docIdToPosting = new HashMap<>();
                 for (Document existingPosting : existingPostings) {
-                    docIdToPosting.put(existingPosting.getInteger("docID"), existingPosting);
+                    docIdToPosting.put(existingPosting.getObjectId("docID"), existingPosting);
                 }
 
                 // Process new postings - update existing or add new ones
                 List<Document> updatedPostings = new ArrayList<>(existingPostings);
                 for (Document newPosting : postingsList) {
-                    int docId = newPosting.getInteger("docID");
+                    ObjectId docId = newPosting.getObjectId("docID");
 
                     if (docIdToPosting.containsKey(docId)) {
                         // Update existing posting
@@ -395,7 +395,7 @@ public class DBManager {
                 insertCount++;
             }
 
-            // Execute bulk operations in batches to avoid memory issues
+            // Execute bulk operations in batches
             if (bulkOperations.size() >= 1000) {
                 executeBulkOperations(bulkOperations);
                 bulkOperations.clear();
@@ -535,7 +535,7 @@ public class DBManager {
     // For phrase matching
     public ArrayList<Document> getDocumentsContent() {
         ArrayList<Document> docs = docCollection.find()
-                .projection(new Document("content", 1).append("url", 1).append("id", 1))
+                .projection(new Document("content", 1).append("url", 1))
                 .into(new ArrayList<>());
 
         return docs;

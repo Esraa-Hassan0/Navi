@@ -375,7 +375,7 @@ public class QueryEngine {
         r.sortDocs();
 
         // Get ranked document IDs
-        List<Integer> docIds = r.sortDocs();
+        List<ObjectId> docIds = r.sortDocs();
 
         // Fetch documents using DB manager
         System.out.println("docIds: " + docIds); // Debug

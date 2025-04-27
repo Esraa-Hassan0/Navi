@@ -1,6 +1,8 @@
 package com.searchengine.navi.indexer;
 
 import org.bson.Document;
+import org.bson.types.ObjectId;
+
 //import org.jsoup.nodes.Document;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -63,7 +65,7 @@ public class Indexer {
         // String text = doc.text();
 
         String url = doc.getString("url");
-        int docId = dbmanager.retrieveDocID(url);
+        ObjectId docId = dbmanager.retrieveDocID(url);
         String text = doc.getString("content");
 
         // System.out.println(PURPLE);
@@ -103,7 +105,7 @@ public class Indexer {
         return tokenMap;
     }
 
-    public void tokenizeText(String text, HashMap<String, Token> tokenMap, int docId, String type) {
+    public void tokenizeText(String text, HashMap<String, Token> tokenMap, ObjectId docId, String type) {
         String restructureText = text.toLowerCase().replaceAll("[^a-zA-Z0-9\\s]", "");
         String[] arrList = restructureText.split("\\s+");
         System.out.println(TEAL + "Tokens before filtering (" + type + "): " + Arrays.toString(arrList) + RESET);

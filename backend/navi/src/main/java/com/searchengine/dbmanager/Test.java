@@ -1,5 +1,6 @@
 package com.searchengine.dbmanager;
 
+import org.bson.types.ObjectId;
 // import org.bson.Document;
 import org.jsoup.nodes.Document;
 
@@ -13,7 +14,7 @@ public class Test {
             DBManager dbManager = new DBManager();
             Document doc = org.jsoup.Jsoup.connect("https://toolsfairy.com/code-test/sample-html-files#").get();
             String url = doc.location();
-            int docID = dbManager.retrieveDocID(url);
+            ObjectId docID = dbManager.retrieveDocID(url);
             System.out.println(docID);
             dbManager.close();
         } catch (Exception e) {
