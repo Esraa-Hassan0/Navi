@@ -534,9 +534,21 @@ public class DBManager {
 
     // For phrase matching
     public ArrayList<Document> getDocumentsContent() {
-        ArrayList<Document> docs = docCollection.find()
-                .projection(new Document("content", 1).append("url", 1))
-                .into(new ArrayList<>());
+        ArrayList<Document> docs = new ArrayList<>();
+
+        FindIterable<Document> cursor = docCollection.find()
+                .projection(new Document("content", 1)
+                        .append("url", 1)
+                        .append("h1", 1)
+                        .append("h2", 1)
+                        .append("a", 1))
+                .batchSize(1000); // Set batch size to 1000 documents per batch
+
+        try (MongoCursor<Document> iterator = cursor.iterator()) {
+            while (iterator.hasNext()) {
+                docs.add(iterator.next());
+            }
+        }
 
         return docs;
     }

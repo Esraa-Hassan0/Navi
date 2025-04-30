@@ -57,7 +57,7 @@ public class Ranker {
         Popularity popularity = new Popularity();
 
         if (isPhrase) {
-            // rankPhrase(phrase);
+            rankPhrase(phrase);
         } else {
             relevance.BM25F();
         }
@@ -239,7 +239,7 @@ public class Ranker {
         Map<String, Double> fieldWeights = Map.of(
                 "h1", 2.5,
                 "h2", 2.0,
-                "a", 1.5,
+                // "a", 1.5,
                 "body", 1.0 // fallback field
         );
 
@@ -247,26 +247,22 @@ public class Ranker {
 
         for (Document doc : docs) {
             ObjectId docId = doc.getObjectId("_id");
-            String url = doc.getString("url");
 
-            if (docId == null || url == null || url.isEmpty()) {
+            if (docId == null) {
                 continue;
             }
             // To be replaced after hagar put them in the database
             try {
-                org.jsoup.nodes.Document jsoupDoc = Jsoup.connect(url).get(); // fetch HTML from URL
+
                 double score = 0.0;
 
                 // Debug output
-                System.out.println(PURPLE + jsoupDoc.text() + " ==========TEXT===========" +
-                        RESET);
-                System.out.println(GREEN + jsoupDoc.select("h1,h2").text() + "=========H1============" + RESET);
 
                 for (Map.Entry<String, Double> entry : fieldWeights.entrySet()) {
                     String tag = entry.getKey();
                     double weight = entry.getValue();
 
-                    String fieldText = tag.equals("body") ? jsoupDoc.body().text() : jsoupDoc.select(tag).text();
+                    String fieldText = tag.equals("body") ? doc.getString("content") : doc.getString(tag);
                     fieldText = fieldText.toLowerCase().trim().replaceAll("\\s+", " ");
 
                     Matcher matcher = pattern.matcher(fieldText);
@@ -291,8 +287,8 @@ public class Ranker {
                 }
 
             } catch (Exception e) {
-                System.out.println(RED + "Error fetching HTML for URL: " + url + " — " +
-                        e.getMessage() + RESET);
+                // System.out.println(RED + "Error fetching HTML for URL: " + url + " — " +
+                // e.getMessage() + RESET);
             }
         }
     }
@@ -303,11 +299,11 @@ public class Ranker {
         terms.add("hi");
         terms.add("hey");
         terms.add("lolo");
-        Ranker r = new Ranker(terms, "hi there", false);
+        Ranker r = new Ranker(terms, "he characters you see below", true);
 
         List<ObjectId> docs = r.sortDocs();
         for (ObjectId doc : docs) {
-            System.out.println(doc);
+            System.out.println(doc + "=================");
         }
 
     }
