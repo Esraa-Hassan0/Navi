@@ -12,6 +12,7 @@ import org.springframework.data.mongodb.core.aggregation.ArrayOperators.In;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -550,6 +551,34 @@ public class DBManager {
             }
         }
 
+
+        return docs;
+    }
+
+    public ArrayList<Document> getDocumentsContainingPhrase(String phrase) {
+
+        // Create regex filters for each field
+        Bson filter = Filters.or(
+                Filters.regex("content",
+                        phrase, "i"),
+                Filters.regex("h1",
+                        phrase, "i"),
+                Filters.regex("h2",
+                        phrase, "i"),
+                Filters.regex("a", phrase, "i"));
+
+        // Execute query with debugging
+        ArrayList<Document> docs = docCollection.find(filter)
+                .projection(new Document("content", 1)
+                        .append("url", 1)
+                        .append("h1", 1)
+                        .append("h2", 1)
+                        .append("a", 1))
+                .batchSize(1000)
+                .into(new ArrayList<>());
+
+
+        System.out.println("Retrieved " + docs.size() + " documents for phrase: " + phrase);
         return docs;
     }
 
@@ -606,11 +635,10 @@ public class DBManager {
     public static void main(String[] args) {
         // Initialize DBManager
         DBManager dbManager = new DBManager();
-        FindIterable<Document> urls = dbManager.getUnindexedDocuments();
-        for (Document doc : urls) {
-            System.out.println(doc);
-        }
-
+        // FindIterable<Document> urls = dbManager.getUnindexedDocuments();
+        // for (Document doc : urls) {
+        // System.out.println(doc);
+        // }
         // Close the connection
         dbManager.close();
     }

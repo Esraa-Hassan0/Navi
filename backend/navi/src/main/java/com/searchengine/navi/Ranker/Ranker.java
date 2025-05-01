@@ -243,7 +243,7 @@ public class Ranker {
                 "body", 1.0 // fallback field
         );
 
-        ArrayList<Document> docs = dbManager.getDocumentsContent();
+        ArrayList<Document> docs = dbManager.getDocumentsContainingPhrase(regex);
 
         for (Document doc : docs) {
             ObjectId docId = doc.getObjectId("_id");
@@ -299,7 +299,9 @@ public class Ranker {
         terms.add("hi");
         terms.add("hey");
         terms.add("lolo");
-        Ranker r = new Ranker(terms, "he characters you see below", true);
+
+        Ranker r = new Ranker(terms, "Choose a Google product Consumer Business Developer", true);
+
 
         List<ObjectId> docs = r.sortDocs();
         for (ObjectId doc : docs) {
