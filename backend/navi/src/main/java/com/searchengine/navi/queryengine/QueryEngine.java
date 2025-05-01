@@ -371,7 +371,9 @@ public class QueryEngine {
         // ArrayList<String> tokens = new ArrayList<>();
         // tokens.add("been");
 
-        r = new Ranker(tokens, phraseQuery.getPhrase(), phraseQuery.isQuoted());
+        ArrayList<Object> queryComponents2 = new ArrayList<>();
+
+        r = new Ranker(tokens, queryComponents2);
         r.sortDocs();
 
         // Get ranked document IDs

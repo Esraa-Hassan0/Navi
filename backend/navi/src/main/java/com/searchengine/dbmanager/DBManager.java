@@ -6,6 +6,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.mongodb.core.aggregation.ArrayOperators.In;
@@ -177,22 +179,22 @@ public class DBManager {
         // Aggregation pipeline
         List<Bson> pipeline = Arrays.asList(
                 // Unwind the postings array
-                Aggregates.unwind(""),
+                Aggregates.unwind("$postings"),
                 // Match postings where docID is in the input list
                 Aggregates.match(Filters.in("postings.docID", docIds)),
                 // Project to extract docID and types
                 Aggregates.project(new Document("_id", 0)
-                        .append("docID", ".docID")
-                        .append("types", ".types")),
+                        .append("docID", "$postings.docID")
+                        .append("types", "$postings.types")),
                 // Convert types to an array of key-value pairs using
                 Aggregates.addFields(
-                        new Field<>("types", new Document("", ""))),
+                        new Field<>("types", new Document("$objectToArray", "$types"))),
                 // Unwind the types array
-                Aggregates.unwind(""),
+                Aggregates.unwind("$types"),
                 // Group by docID and field name, summing the frequencies
                 Aggregates.group(
-                        new Document("docID", "").append("field", ".k"),
-                        Accumulators.sum("total", ".v")));
+                        new Document("docID", "$docID").append("field", ".k"),
+                        Accumulators.sum("total", "$types.v")));
 
         // Execute aggregation
         try {
@@ -551,7 +553,6 @@ public class DBManager {
             }
         }
 
-
         return docs;
     }
 
@@ -577,9 +578,20 @@ public class DBManager {
                 .batchSize(1000)
                 .into(new ArrayList<>());
 
-
         System.out.println("Retrieved " + docs.size() + " documents for phrase: " + phrase);
         return docs;
+    }
+
+    public HashSet<ObjectId> getAllDocumentIds() {
+        HashSet<ObjectId> allDocIds = new HashSet<>();
+        for (Document doc : docCollection.find().projection(new Document("_id", 1))) {
+            ObjectId docId = doc.getObjectId("_id");
+            if (docId != null) {
+                allDocIds.add(docId);
+            }
+        }
+        System.out.println("Total documents in database: " + allDocIds.size());
+        return allDocIds;
     }
 
     // Optional: Close the connection

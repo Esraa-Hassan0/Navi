@@ -1,8 +1,11 @@
 package com.searchengine.navi.Ranker;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.lang.Math;
 import com.searchengine.dbmanager.DBManager;
 import com.searchengine.navi.queryengine.PhraseMatching;
@@ -30,12 +33,11 @@ public class Ranker {
 
     // Phrase matching
 
-    private boolean isPhrase = false;
-    private String phrase = "";
+    ArrayList<Object> phraseComponents = new ArrayList<>();
 
     static DBManager dbManager;
 
-    public Ranker(ArrayList<String> queryTerms, String phrase, boolean isPhrase) {
+    public Ranker(ArrayList<String> queryTerms, ArrayList<Object> phraseComponents) {
         terms = queryTerms;
         dbManager = new DBManager();
         scores = new HashMap<>();
@@ -48,18 +50,36 @@ public class Ranker {
 
         // phrase matching
 
-        this.phrase = phrase;
-        this.isPhrase = isPhrase;
+        this.phraseComponents = phraseComponents;
     }
 
     void rank() {
         Relevance relevance = new Relevance();
         Popularity popularity = new Popularity();
 
-        if (isPhrase) {
-            rankPhrase(phrase);
-        } else {
+        if (phraseComponents != null && !phraseComponents.isEmpty()) {
+            if (phraseComponents.size() == 1 && phraseComponents.get(0) instanceof String) {
+                // Single phrase query
+                String phrase = (String) phraseComponents.get(0);
+                System.out.println(PURPLE + "Ranking single phrase: " + phrase + RESET);
+                rankPhrase(phrase, null, null);
+            } else if (phraseComponents.stream()
+                    .anyMatch(c -> c instanceof String && List.of("AND", "OR", "NOT").contains(c))) {
+                // Boolean phrase query
+                System.out.println(PURPLE + "Ranking Boolean phrase query" + RESET);
+                rankBoolPhrase();
+            } else {
+                // Treat as term-based query
+                System.out.println(PURPLE + "Ranking terms with BM25" + RESET);
+                relevance.BM25F();
+            }
+        } else if (terms != null && !terms.isEmpty()) {
+            // Term-based query
+            System.out.println(PURPLE + "Ranking terms with BM25" + RESET);
             relevance.BM25F();
+        } else {
+            System.out.println(RED + "Error: No valid query provided" + RESET);
+            return;
         }
 
         popularity.PageRank();
@@ -127,11 +147,16 @@ public class Ranker {
             }
 
             // Calculate all docsFieldLengths
-            docFieldLengths = dbManager.getFieldOccurrencesForDocs(new ArrayList<>(commonDocs));
+            if (!commonDocs.isEmpty()) {
+                for (ObjectId doc : commonDocs) {
+                    System.out.println("doc " + doc);
+                }
+                docFieldLengths = dbManager.getFieldOccurrencesForDocs(new ArrayList<>(commonDocs));
 
-            for (ObjectId doc : commonDocs) {
-                for (String field : fields) {
-                    System.out.println("doc " + field + " length: " + docFieldLengths.get(doc).get(field));
+                for (ObjectId doc : commonDocs) {
+                    for (String field : fields) {
+                        System.out.println("doc " + field + " length: " + docFieldLengths.get(doc).get(field));
+                    }
                 }
             }
             long endTime = System.nanoTime();
@@ -148,7 +173,7 @@ public class Ranker {
 
             // Loop over query terms
             for (String term : terms) {
-                System.out.println(YELLOW + "in terms" + RESET);
+                System.out.println(YELLOW + "in term: " + term + RESET);
                 Double IDF = IDFs.get(term);
                 IDFs.put(term, IDF);
 
@@ -230,7 +255,10 @@ public class Ranker {
     }
 
     // this funcction has to fill relevanceScores and commonDocs
-    void rankPhrase(String phrase) {
+    void rankPhrase(String phrase, HashMap<ObjectId, Double> targetScores, HashSet<ObjectId> targetDocs) {
+        // Default to class-level collections if null
+        HashMap<ObjectId, Double> scores = (targetScores != null) ? targetScores : relevanceScores;
+        HashSet<ObjectId> resultDocs = (targetDocs != null) ? targetDocs : commonDocs;
 
         String regex = new PhraseMatching().BuildStringRegex(phrase);
         Pattern pattern = Pattern.compile(regex);
@@ -239,7 +267,7 @@ public class Ranker {
         Map<String, Double> fieldWeights = Map.of(
                 "h1", 2.5,
                 "h2", 2.0,
-                // "a", 1.5,
+                "a", 1.5,
                 "body", 1.0 // fallback field
         );
 
@@ -282,8 +310,8 @@ public class Ranker {
                 }
 
                 if (score > 0.0) {
-                    relevanceScores.put(docId, score);
-                    commonDocs.add(docId);
+                    scores.put(docId, score);
+                    resultDocs.add(docId);
                 }
 
             } catch (Exception e) {
@@ -293,20 +321,220 @@ public class Ranker {
         }
     }
 
+    // Rank boolean operators
+
+    void rankBoolPhrase() {
+        // Step 1: Validate query
+        if (phraseComponents == null || phraseComponents.isEmpty()) {
+            System.out.println(RED + "Error: Empty phrase components" + RESET);
+            return;
+        }
+
+        List<Map<ObjectId, Double>> phraseScores = new ArrayList<>();
+        List<Set<ObjectId>> phraseDocs = new ArrayList<>();
+        int phraseCount = (int) phraseComponents.stream()
+                .filter(c -> c instanceof String && !List.of("AND", "OR", "NOT").contains(c))
+                .count();
+
+        if (phraseCount > 3) {
+            System.out.println(RED + "Error: Maximum of 3 phrases allowed" + RESET);
+            return;
+        }
+
+        // Step 2: Process each phrase
+        HashMap<ObjectId, Double> tempRelevanceScores = new HashMap<>();
+        HashSet<ObjectId> tempCommonDocs = new HashSet<>();
+        Map<Integer, String> phraseMap = new HashMap<>();
+        int currentIndex = 0;
+
+        for (Object component : phraseComponents) {
+            if (component instanceof String && !List.of("AND", "OR", "NOT").contains((String) component)) {
+                String phrase = ((String) component).trim();
+                tempRelevanceScores.clear();
+                tempCommonDocs.clear();
+                rankPhrase(phrase, tempRelevanceScores, tempCommonDocs);
+                phraseScores.add(new HashMap<>(tempRelevanceScores));
+                phraseDocs.add(new HashSet<>(tempCommonDocs));
+                phraseMap.put(currentIndex, phrase);
+                System.out
+                        .println(PURPLE + "Phrase '" + phrase + "' matches " + tempCommonDocs.size() + " docs" + RESET);
+                currentIndex++;
+            }
+        }
+
+        // Step 3: Normalize components
+        List<Object> normalized = new ArrayList<>();
+        int index = 0;
+        for (int i = 0; i < phraseComponents.size(); i++) {
+            Object component = phraseComponents.get(i);
+            if (component instanceof String) {
+                String str = (String) component;
+                if (str.equals("NOT")) {
+                    if (i + 1 >= phraseComponents.size() || !(phraseComponents.get(i + 1) instanceof String)
+                            || List.of("AND", "OR", "NOT").contains((String) phraseComponents.get(i + 1))) {
+                        System.out.println(RED + "Invalid query: NOT must be followed by a phrase" + RESET);
+                        return;
+                    }
+                    normalized.add(new AbstractMap.SimpleEntry<>("NOT", index));
+                    i++;
+                    index++;
+                } else if (List.of("AND", "OR").contains(str)) {
+                    normalized.add(str);
+                } else {
+                    normalized.add(index++);
+                }
+            }
+        }
+        System.out.println(PURPLE + "Normalized components: " + normalized + RESET);
+
+        // Step 4: Resolve NOTs
+        List<Set<ObjectId>> resolvedDocs = new ArrayList<>(phraseDocs);
+        List<Map<ObjectId, Double>> resolvedScores = new ArrayList<>(phraseScores);
+        HashSet<ObjectId> universeDocs = dbManager.getAllDocumentIds();
+
+        for (int i = 0; i < normalized.size(); i++) {
+            Object component = normalized.get(i);
+            if (component instanceof Map.Entry) {
+                @SuppressWarnings("unchecked")
+                Map.Entry<String, Integer> entry = (Map.Entry<String, Integer>) component;
+                if ("NOT".equals(entry.getKey())) {
+                    int idx = entry.getValue();
+                    Set<ObjectId> negatedDocs = new HashSet<>(universeDocs);
+                    negatedDocs.removeAll(phraseDocs.get(idx));
+                    resolvedDocs.set(idx, negatedDocs);
+                    Map<ObjectId, Double> negatedScores = new HashMap<>();
+                    for (ObjectId docId : negatedDocs) {
+                        negatedScores.put(docId, 0.1);
+                    }
+                    resolvedScores.set(idx, negatedScores);
+                    normalized.set(i, idx);
+                    System.out.println(PURPLE + "After NOT on index " + idx + ", docs: " + negatedDocs.size() + RESET);
+                }
+            }
+        }
+
+        // Step 5: Evaluate with precedence (NOT > AND > OR)
+        if (normalized.isEmpty()) {
+            System.out.println(RED + "Invalid query: Empty normalized components" + RESET);
+            return;
+        }
+
+        Set<ObjectId> resultDocs = new HashSet<>();
+        Map<ObjectId, Double> resultScores = new HashMap<>();
+        boolean startsWithNot = phraseComponents.get(0).equals("NOT");
+
+        // Process OR/AND first, then apply NOT
+        int i = 0;
+        if (startsWithNot) {
+            if (normalized.get(0) instanceof Integer) {
+                int idx = (Integer) normalized.get(0);
+                resultDocs.addAll(resolvedDocs.get(idx));
+                resultScores.putAll(resolvedScores.get(idx));
+                i = 1;
+            } else {
+                System.out.println(RED + "Invalid query: NOT must be followed by a phrase index" + RESET);
+                return;
+            }
+        } else if (normalized.get(0) instanceof Integer) {
+            int idx = (Integer) normalized.get(0);
+            resultDocs.addAll(resolvedDocs.get(idx));
+            resultScores.putAll(resolvedScores.get(idx));
+            i = 1;
+        } else {
+            System.out.println(RED + "Invalid query: Must start with a phrase or NOT" + RESET);
+            return;
+        }
+
+        // Handle OR and AND
+        while (i < normalized.size() - 1) {
+            if (!(normalized.get(i) instanceof String) || !(normalized.get(i + 1) instanceof Integer)) {
+                System.out.println(RED + "Invalid query structure at position " + i + ": " + normalized + RESET);
+                return;
+            }
+            String operator = (String) normalized.get(i);
+            int nextIdx = (Integer) normalized.get(i + 1);
+            Set<ObjectId> nextDocs = resolvedDocs.get(nextIdx);
+            Map<ObjectId, Double> nextScores = resolvedScores.get(nextIdx);
+
+            if ("OR".equals(operator)) {
+                for (ObjectId docId : nextDocs) {
+                    double score = nextScores.getOrDefault(docId, 0.0);
+                    if (resultDocs.contains(docId)) {
+                        double existingScore = resultScores.getOrDefault(docId, 0.0);
+                        score = Math.max(existingScore, score);
+                    }
+                    resultDocs.add(docId);
+                    resultScores.put(docId, score);
+                }
+                System.out.println(PURPLE + "After OR, resultDocs: " + resultDocs.size() + RESET);
+            } else if ("AND".equals(operator)) {
+                Set<ObjectId> newResultDocs = new HashSet<>();
+                Map<ObjectId, Double> newScores = new HashMap<>();
+                for (ObjectId docId : resultDocs) {
+                    if (nextDocs.contains(docId)) {
+                        double score1 = resultScores.getOrDefault(docId, 0.0);
+                        double score2 = nextScores.getOrDefault(docId, 0.0);
+                        if (score1 > 0 && score2 > 0) {
+                            newScores.put(docId, (score1 + score2) / 2.0);
+                            newResultDocs.add(docId);
+                        }
+                    }
+                }
+                resultDocs.clear();
+                resultDocs.addAll(newResultDocs);
+                resultScores.clear();
+                resultScores.putAll(newScores);
+                System.out.println(PURPLE + "After AND, resultDocs: " + resultDocs.size() + RESET);
+            }
+            i += 2;
+        }
+
+        // Apply trailing NOT
+        if (i < normalized.size() && normalized.get(i) instanceof Integer) {
+            int notIdx = (Integer) normalized.get(i);
+            resultDocs.removeAll(resolvedDocs.get(notIdx));
+            Map<ObjectId, Double> newScores = new HashMap<>();
+            for (ObjectId docId : resultDocs) {
+                newScores.put(docId, resultScores.getOrDefault(docId, 0.0));
+            }
+            resultScores.clear();
+            resultScores.putAll(newScores);
+            System.out.println(PURPLE + "After NOT, resultDocs: " + resultDocs.size() + RESET);
+        }
+
+        // Step 6: Assign final results
+        commonDocs.clear();
+        commonDocs.addAll(resultDocs);
+        relevanceScores.clear();
+        relevanceScores.putAll(resultScores);
+
+        if (resultDocs.isEmpty()) {
+            System.out.println(RED + "No documents satisfy the Boolean query" + RESET);
+        }
+    }
+
     public static void main(String args[]) {
         ArrayList<String> terms = new ArrayList<>();
-        terms.add("alyaa");
-        terms.add("hi");
-        terms.add("hey");
-        terms.add("lolo");
+        // terms.add("alyaa");
+        // terms.add("hi");
+        // terms.add("hey");
+        terms.add("LinkedIn");
+        ArrayList<Object> queryComponents2 = new ArrayList<>();
 
-        Ranker r = new Ranker(terms, "Choose a Google product Consumer Business Developer", true);
-
+        // queryComponents2.add("NOT");
+        // queryComponents2.add("Learn more about the LinkedIn");
+        // // queryComponents2.add("OR");
+        // queryComponents2.add("Privacy & Terms Google Terms of Service Terms Your
+        // relationship with");
+        // queryComponents2.add("OR");
+        // queryComponents2.add(" Learn more about the LinkedIn Professional
+        // Community");
+        Ranker r = new Ranker(terms, queryComponents2);
 
         List<ObjectId> docs = r.sortDocs();
-        for (ObjectId doc : docs) {
-            System.out.println(doc + "=================");
-        }
+        // for (ObjectId doc : docs) {
+        // System.out.println(doc + "=================");
+        // }
 
     }
 }
