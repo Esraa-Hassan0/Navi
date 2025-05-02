@@ -60,8 +60,8 @@
 }
 
 .SearchBar {
-  /* width: 200%; */
-  max-width: 400px;
+  width: 300%;
+  max-width: 700px;
   max-height: 35px;
   padding: 12px 16px 12px 40px;
   font-size: 16px;

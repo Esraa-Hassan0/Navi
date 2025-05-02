@@ -451,8 +451,42 @@ public class DBManager {
 
     }
 
-    public void getDocContentBy(String url, int id) {
+    /**
+     * Retrieves document content by URL or ID
+     * 
+     * @param url The URL of the document to retrieve
+     * @param id  The ID of the document to retrieve (used if URL is null or empty)
+     * @return Document containing the content or null if not found
+     */
+    public String getDocContentById(String url) {
+        try {
+            Document filter = null;
 
+            // Determine which filter to use based on provided parameters
+            if (url != null && !url.trim().isEmpty()) {
+                // If URL is provided, use it as the primary search criteria
+                filter = new Document("url", url);
+            }
+
+            // Define which fields to retrieve
+            Document projection = new Document()
+                    .append("content", 1);
+
+            // Find and return the document
+            Document result = docCollection.find(filter)
+                    .projection(projection)
+                    .first();
+
+            if (result != null) {
+                return result.getString("content");
+            } else {
+                logger.warn("No document found with {} {}");
+                return null;
+            }
+        } catch (MongoException e) {
+            logger.error("Error retrieving document content: {}", e.getMessage(), e);
+            return null;
+        }
     }
 
     private void insertSampleData() {
@@ -595,63 +629,56 @@ public class DBManager {
     }
 
     // Optional: Close the connection
+    /**
+     * Safely closes the MongoDB connection
+     */
     public void close() {
-        try {
-            // Tell any monitoring code you're in shutdown process
-            isShuttingDown = true;
+        if (isShuttingDown) {
+            logger.warn("Already shutting down");
+            return;
+        }
 
-            if (mongoClient != null) {
-                // Stop any ongoing operations
-                try {
-                    // Give background operations time to complete naturally
-                    Thread.sleep(500);
-                } catch (InterruptedException ignored) {
-                    // Ignore if interrupted during sleep
-                }
+        logger.info("Beginning MongoDB connection shutdown");
+        isShuttingDown = true;
 
-                // Get the current thread group
-                ThreadGroup group = Thread.currentThread().getThreadGroup();
-                // Estimate thread count
-                int estimatedSize = group.activeCount() * 2;
-                Thread[] threads = new Thread[estimatedSize];
-                // Fill our array with active threads
-                int actualSize = group.enumerate(threads);
-
-                // Find and interrupt MongoDB monitoring threads before closing
-                for (int i = 0; i < actualSize; i++) {
-                    Thread thread = threads[i];
-                    String threadName = thread.getName();
-                    // Look for MongoDB driver threads
-                    if (threadName.contains("cluster-") && threadName.contains("mongodb")) {
-                        try {
-                            // Interrupt these threads explicitly
-                            thread.interrupt();
-                        } catch (Exception ignored) {
-                            // Ignore any errors from this attempt
-                        }
+        if (mongoClient != null) {
+            try {
+                // Create a separate thread to handle the shutdown
+                // This avoids the ClassNotFoundException issue during Maven shutdown
+                Thread shutdownThread = new Thread(() -> {
+                    try {
+                        logger.info("Closing MongoDB client");
+                        mongoClient.close();
+                        logger.info("MongoDB connection closed successfully");
+                    } catch (Exception e) {
+                        logger.error("Error during MongoDB connection closure: {}", e.getMessage());
                     }
-                }
+                });
 
-                // Now close the client
-                Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-                    mongoClient.close();
-                }));
-                System.out.println("MongoDB connection closed successfully.");
+                // Set as daemon to prevent it from keeping the application alive
+                shutdownThread.setDaemon(true);
+                shutdownThread.start();
+
+                // Give the thread a short time to complete
+                shutdownThread.join(2000);
+
+            } catch (InterruptedException e) {
+                logger.warn("Shutdown process was interrupted");
+                Thread.currentThread().interrupt(); // Restore the interrupt status
+            } catch (Exception e) {
+                logger.error("Error during MongoDB connection closure: {}", e.getMessage());
+            } finally {
+                // Set to null to allow garbage collection
+                mongoClient = null;
             }
-        } catch (Exception e) {
-            System.err.println("Error during MongoDB connection closure: " + e.getMessage());
-            e.printStackTrace();
         }
     }
 
     public static void main(String[] args) {
         // Initialize DBManager
         DBManager dbManager = new DBManager();
-        // FindIterable<Document> urls = dbManager.getUnindexedDocuments();
-        // for (Document doc : urls) {
-        // System.out.println(doc);
-        // }
-        // Close the connection
+        String content = dbManager.getDocContentById("https://chatgpt.com");
+        System.out.println("connntrnt"+content);
         dbManager.close();
     }
 }

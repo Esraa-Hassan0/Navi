@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
-import { useLocation } from "react-router-dom"; // Import useLocation
+import { useLocation } from "react-router-dom";
 import logo from "../../assets/logo.png";
 import logoLightMode from "../../assets/logoLightMode.png";
 import DarkModeIcon from "../../assets/darkmodeicon2.png";
@@ -18,42 +18,28 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import "./ResultPage.css";
 
-// // Dummy data with more than 20 items for testing pagination
-// const dummyResults = Array.from({ length: 25 }, (_, i) => ({
-//   url: `https://example.com/sample${i + 1}`,
-//   title: `Sample Document ${i + 1}`,
-//   snippet: `This is sample document ${i + 1} for testing search functionality.`,
-// }));
-
-// // Dummy suggestions
-// const dummySuggestions = [
-//   "Sample Search Tips",
-//   "Sample Documents Guide",
-//   "Testing Search Features",
-//   "Search Engine Basics",
-// ];
-
 function ResultPage() {
-  const location = useLocation(); // Get location object
-  const [suggestions, setSuggestions] = useState([]); // State for suggestions
+  const location = useLocation();
+  const [suggestions, setSuggestions] = useState([]);
   const [isDarkMode, setDarkMode] = useState(false);
   const [query, setQuery] = useState(location.state?.query || "");
-  const [pendingSuggestion, setPendingSuggestion] = useState(null); // Track suggestion click
+  const [pendingSuggestion, setPendingSuggestion] = useState(null);
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [tokens, setTokens] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
+  const [searchTime, setSearchTime] = useState(0);
+  const [resultCount, setResultCount] = useState(0);
   const itemsPerPage = 20;
 
   // Call handleSearch on mount if query exists
   useEffect(() => {
     if (query && query.trim() !== "" && results.length === 0) {
-      // Only call if no results are provided
       console.log("Initial query:", query);
       handleSearch({ preventDefault: () => {} });
     }
-  }, []); // Empty dependency array to run on mount
+  }, []);
 
   // Fetch suggestions as the user types
   useEffect(() => {
@@ -64,8 +50,7 @@ function ResultPage() {
       }
       try {
         const response = await axios.get(
-          "http://localhost:8080/suggestions?query=" + query,
-          { query }
+          `http://localhost:8080/suggestions?query=${encodeURIComponent(query)}`
         );
         setSuggestions(response.data || []);
         console.log("Suggestions:", response.data);
@@ -80,43 +65,19 @@ function ResultPage() {
     return () => clearTimeout(debounce);
   }, [query]);
 
-  useEffect(() => {
-    const fetchResults = async () => {
-      if (!query || query.trim() === "") {
-        setResults([]);
-        return;
-      }
-      try {
-        const response = await axios.get("http://localhost:8080/results");
-        const responsedata = response.data.results || [];
-        setResults(responsedata || []);
-        console.log("resultsssss:", responsedata);
-      } catch (error) {
-        console.error("Error fetching suggestions:", error);
-        setResults([]);
-      } finally {
-        setLoading(false); // Set loading to false after fetching results
-      }
-    };
-
-    // Debounce the API call to avoid excessive requests
-
-    const debounce = setTimeout(fetchResults, 300);
-    return () => clearTimeout(debounce);
-  }, [query, pendingSuggestion]);
-
   const handleKeyPress = (e) => {
     if (e.key === "Enter") {
       handleSearch(e);
     }
   };
+
   // Handle query state change for suggestion click
   useEffect(() => {
     if (pendingSuggestion && pendingSuggestion === query) {
       // Query state has updated, proceed with sequence
       setSuggestions([]);
       setIsTyping(false);
-      handleSearch({ preventDefault: () => {} }, query);
+      handleSearch({ preventDefault: () => {} });
       setPendingSuggestion(null); // Clear pending suggestion
     }
   }, [query, pendingSuggestion]);
@@ -125,24 +86,41 @@ function ResultPage() {
     e.preventDefault();
     setLoading(true);
     setSuggestions([]); // Clear suggestions on search
+    
+    if (!query || query.trim() === "") {
+      setLoading(false);
+      return;
+    }
+    
     try {
-      const response = await axios.post(
-        "http://localhost:8080/search?query=" + query,
+      // Step 1: Get search tokens
+      const searchResponse = await axios.post(
+        `http://localhost:8080/search?query=${encodeURIComponent(query)}`,
         { query }
       );
-      const searchTokens = response.data;
-      console.log("Search tokens:", response);
-      // setTokens(searchTokens);
-      console.log("notInitial query:", query);
-      setTokens(searchTokens || []);
-      console.log("Search tokens:", searchTokens || []);
-      console.log(" tokens:", tokens);
+      
+      const searchTokens = searchResponse.data || [];
+      setTokens(searchTokens);
+      console.log("Search tokens:", searchTokens);
+      
+      // Step 2: Get search results with the same query
+      const resultsResponse = await axios.get(
+        `http://localhost:8080/results?query=${encodeURIComponent(query)}`
+      );
+      
+      const responseData = resultsResponse.data || {};
+      console.log("Results data:", responseData);
+      
+      setResults(responseData.results || []);
+      setSearchTime(responseData.total_time || 0);
+      setResultCount(responseData.results ? responseData.results.length : 0);
+      
     } catch (error) {
       console.error("Error fetching search results:", error);
       setResults([]);
       setTokens([]);
     } finally {
-      // setLoading(false);
+      setLoading(false);
     }
   };
 
@@ -277,13 +255,13 @@ function ResultPage() {
             <>
               <div className="data">
                 <div className="timeSearching">
-                  You found {results.length} items related in 3.1111 s
+                  You found {resultCount} items related in {searchTime/1000} s
                 </div>
               </div>
               <div className="Tokens">
                 <ul className="listTokens">
                   {tokens.map((token, index) => (
-                    <li className="token">{token}</li>
+                    <li key={index} className="token">{token}</li>
                   ))}
                 </ul>
               </div>
@@ -316,10 +294,8 @@ function ResultPage() {
                         </div>
                         <div className="resultContent">
                           <h3 className="resultTitle">
-                            {" "}
                             <a
                               href={result.url}
-                              // className="resultUrl"
                               target="_blank"
                               rel="noopener noreferrer"
                             >
@@ -328,7 +304,9 @@ function ResultPage() {
                           </h3>
                           <p className="resultSnippet">
                             <div
-                              dangerouslySetInnerHTML={{ __html: result.snippets }}
+                              dangerouslySetInnerHTML={{
+                                __html: result.snippets,
+                              }}
                             />
                           </p>
                         </div>

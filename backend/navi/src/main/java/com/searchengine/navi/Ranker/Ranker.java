@@ -191,20 +191,20 @@ public class Ranker {
                     ObjectId docId = posting.getObjectId("docID");
 
                     commonDocs.add(docId);
-                    System.out.println(RED + "in doc " + docId + RESET);
+                    System.out.print(RED + "in doc " + docId + RESET);
 
                     double totalScore = 0.0;
 
                     for (int i = 0; i < 4; i++) {
-                        System.out.println(PURPLE + "in fields" + RESET);
+                        System.out.print(PURPLE + "in fields" + RESET );
 
-                        System.out.println(
+                        System.out.print(
                                 GREEN + fields[i] + " length: " + docFieldLengths.get(docId).get(fields[i]) + RESET);
 
                         Document types = (Document) posting.get("types");
 
                         int TF = types.getInteger(fields[i], 0);
-                        System.out.println(GREEN + "TF: " + TF + RESET);
+                        System.out.print(GREEN + "TF: " + TF + RESET);
 
                         if (TF < 1) {
                             continue;
@@ -518,7 +518,7 @@ public class Ranker {
         // terms.add("alyaa");
         // terms.add("hi");
         // terms.add("hey");
-        terms.add("LinkedIn");
+        terms.add("Google Cloud newsletter Stay");
         ArrayList<Object> queryComponents2 = new ArrayList<>();
 
         // queryComponents2.add("NOT");
@@ -529,9 +529,18 @@ public class Ranker {
         // queryComponents2.add("OR");
         // queryComponents2.add(" Learn more about the LinkedIn Professional
         // Community");
+        System.out.println("terms");
+        for (Object object : terms) {
+            System.out.println(object);
+        }
+        System.out.println("queryComponents2");
+        for (Object object : queryComponents2) {
+            System.out.println(object);
+        }
         Ranker r = new Ranker(terms, queryComponents2);
 
         List<ObjectId> docs = r.sortDocs();
+
         // for (ObjectId doc : docs) {
         // System.out.println(doc + "=================");
         // }

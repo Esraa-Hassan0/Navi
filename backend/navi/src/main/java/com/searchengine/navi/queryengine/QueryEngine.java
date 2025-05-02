@@ -34,6 +34,8 @@ public class QueryEngine {
     private DBManager dbManager;
     private Ranker r;
     private ArrayList<String> tokens = new ArrayList<>(); // Store parsed tokens for snippet generation
+    private ArrayList<String> tokens_withoutStemming = new ArrayList<>(); // Store parsed tokens for snippet generation
+    ArrayList<Object> queryComponents = new ArrayList<>();
     int resultCount = 0; // Counter for the number of results found
     int suggestionCount = 0; // Counter for the number of suggestions found
 
@@ -77,6 +79,7 @@ public class QueryEngine {
 
         ArrayList<String> result = new ArrayList<>();
         PorterStemmer stemmer = new PorterStemmer();
+        tokens_withoutStemming = tokenizeQuery(query);
         query = query.trim().toLowerCase();
 
         // Split query into tokens (phrases and operators)
@@ -116,7 +119,7 @@ public class QueryEngine {
                     phraseQuery = new Phrase(token, true);
 
                 }
-                String phrase = processPhrase(token, stemmer);
+                String phrase = token;
 
                 result.add(phrase);
 
@@ -148,7 +151,9 @@ public class QueryEngine {
         }
 
         System.out.println("Parsed query: " + result.stream().map(Object::toString).collect(Collectors.joining(" "))); // Debug
-
+        queryComponents = new ArrayList<>(result);
+        System.err.println("Query comp ");
+        System.err.println(queryComponents);
         return result;
     }
 
@@ -208,32 +213,32 @@ public class QueryEngine {
         return tokens;
     }
 
-    private String processPhrase(String phrase, PorterStemmer stemmer) {
-        List<String> processed = new ArrayList<>();
-        // Clean and split phrase
-        String cleaned = phrase.replaceAll("[^a-z0-9\\s]", "");
-        String[] words = cleaned.split("\\s+");
+    // private String processPhrase(String phrase, PorterStemmer stemmer) {
+    // List<String> processed = new ArrayList<>();
+    // // Clean and split phrase
+    // String cleaned = phrase.replaceAll("[^a-z0-9\\s]", "");
+    // String[] words = cleaned.split("\\s+");
 
-        // Stem and filter stop words
-        for (String word : words) {
-            if (!word.isEmpty()) {
-                String stemmed = stemmer.stem(word);
-                if (!stopWords.contains(stemmed) && !stemmed.isEmpty()) {
-                    processed.add(stemmed);
-                }
-            }
-        }
-        StringBuilder sb = new StringBuilder();
-        for (String word : processed) {
-            sb.append(word).append(" ");
-        }
-        // Remove trailing space
-        if (sb.length() > 0) {
-            sb.setLength(sb.length() - 1); // Remove last space
-        }
-        // Return the processed phrase as a single string
-        return sb.toString();
-    }
+    // // Stem and filter stop words
+    // for (String word : words) {
+    // if (!word.isEmpty()) {
+    // String stemmed = stemmer.stem(word);
+    // if (!stopWords.contains(stemmed) && !stemmed.isEmpty()) {
+    // processed.add(stemmed);
+    // }
+    // }
+    // }
+    // StringBuilder sb = new StringBuilder();
+    // for (String word : processed) {
+    // sb.append(word).append(" ");
+    // }
+    // // Remove trailing space
+    // if (sb.length() > 0) {
+    // sb.setLength(sb.length() - 1); // Remove last space
+    // }
+    // // Return the processed phrase as a single string
+    // return sb.toString();
+    // }
 
     private boolean isOperator(String token) {
         return token.equalsIgnoreCase("and") ||
@@ -254,19 +259,12 @@ public class QueryEngine {
     }
 
     public String getSnippet(String docURL) {
-        String content;
-        try {
-            content = Jsoup.connect(docURL)
-                    .userAgent("Mozilla/5.0")
-                    .get()
-                    .text();
-        } catch (IOException e) {
-            return "Unable to fetch content.";
-        }
 
-        String contentLower = content.toLowerCase();
-        List<String> lowerTokens = tokens.stream()
-                .map(t -> t.toLowerCase().replaceAll("\"", ""))
+        String content = dbManager.getDocContentById(docURL);
+
+        List<String> Tokens = tokens_withoutStemming.stream()
+                .filter(token -> !stopWords.contains(token) && !token.isEmpty())
+                .map(t -> t.replaceAll("\"", ""))
                 .collect(Collectors.toList());
 
         int bestStart = 0;
@@ -274,13 +272,22 @@ public class QueryEngine {
 
         for (int i = 0; i < content.length() - 400; i += 50) {
             int end = Math.min(content.length(), i + 400);
-            String window = contentLower.substring(i, end);
+            String window = content.substring(i, end);
             int count = 0;
-            for (String token : lowerTokens) {
-                if (window.contains(token)) {
-                    count++;
+            if (Tokens.size() > 0)
+                for (String token : Tokens) {
+                    if (window.contains(token)) {
+                        count++;
+                    }
                 }
-            }
+            else
+                for (Object obj : queryComponents) {
+                    String token = (String) obj;
+                    if (window.contains(token)) {
+                        count++;
+                    }
+                }
+
             if (count > maxCount) {
                 maxCount = count;
                 bestStart = i;
@@ -291,72 +298,13 @@ public class QueryEngine {
         String snippetRaw = content.substring(bestStart, snippetEnd);
 
         // Highlight tokens in the original-case snippet
-        for (String token : lowerTokens) {
+        for (String token : Tokens) {
             snippetRaw = snippetRaw.replaceAll("(?i)\\b" + token + "\\b", "<b>" + token + "</b>");
 
         }
 
         return "... " + snippetRaw.trim() + " ...";
     }
-
-    // private String generateSnippet(String content) {
-    // StringBuilder snippet = new StringBuilder("... ");
-    // String contentLower = content.toLowerCase();
-
-    // // // Highlight quoted phrases first
-    // // for (List<String> phrase : quotedPhrases) {
-    // // StringBuilder phraseText = new StringBuilder();
-    // // for (int i = 0; i < phrase.size(); i++) {
-    // // phraseText.append(phrase.get(i));
-    // // if (i < phrase.size() - 1) {
-    // // phraseText.append("\\s+");
-    // // }
-    // // }
-    // // Pattern pattern = Pattern.compile(phraseText.toString(),
-    // // Pattern.CASE_INSENSITIVE);
-    // // Matcher matcher = pattern.matcher(contentLower);
-    // // if (matcher.find()) {
-    // // int start = Math.max(0, matcher.start() - 20);
-    // // int end = Math.min(content.length(), matcher.end() + 20);
-    // // String excerpt = content.substring(start, end);
-    // // // Highlight the phrase
-    // // String phraseStr = content.substring(matcher.start(), matcher.end());
-    // // excerpt = excerpt.replaceAll("(?i)" + phraseText, "**" + phraseStr +
-    // "**");
-    // // snippet.append(excerpt).append(" ... ");
-    // // return snippet.toString();
-    // // }
-    // // }
-
-    // Set<String> seen = new HashSet<>();
-    // for (String word : tokens) {
-    // if (seen.contains(word.toLowerCase()))
-    // continue;
-    // seen.add(word.toLowerCase());
-
-    // Pattern pattern = Pattern.compile("\\b" + Pattern.quote(word) + "\\b",
-    // Pattern.CASE_INSENSITIVE);
-    // Matcher matcher = pattern.matcher(contentLower);
-
-    // if (matcher.find()) {
-    // int start = Math.max(0, matcher.start() - 30);
-    // int end = Math.min(content.length(), matcher.end() + 30);
-    // String excerpt = content.substring(start, end);
-    // // Highlight the word (preserve original casing)
-    // excerpt = excerpt.replaceAll("(?i)\\b" + Pattern.quote(word) + "\\b", "**" +
-    // word + "**");
-    // snippet.append(excerpt).append(" ... ");
-    // }
-    // }
-
-    // // return snippet.toString();
-
-    // // If no matches, return a default portion of the content
-    // int end = Math.min(50, content.length());
-    // snippet.append(content.substring(0, end)).append(" ... ");
-    // System.out.println("Snippet: " + snippet.toString()); // Debug
-    // return snippet.toString();
-    // }
 
     @GetMapping("/suggestions")
     public List<String> getSuggestions(@RequestParam("query") String query) {
@@ -367,24 +315,25 @@ public class QueryEngine {
 
     @GetMapping("/results")
     public Document getResults() {
-        // Initialize Ranker with search tokens
-        // ArrayList<String> tokens = new ArrayList<>();
-        // tokens.add("been");
+        long prevTime = System.currentTimeMillis();
 
-        ArrayList<Object> queryComponents2 = new ArrayList<>();
-
-        r = new Ranker(tokens, queryComponents2);
+        r = new Ranker(tokens, queryComponents);
         r.sortDocs();
 
         // Get ranked document IDs
         List<ObjectId> docIds = r.sortDocs();
-
+        System.out.println(docIds.size());
         // Fetch documents using DB manager
-        System.out.println("docIds: " + docIds); // Debug
+        // System.out.println("docIds: " + docIds); // Debug
         List<Document> results = dbManager.getDocumentsByID(docIds);
-        System.out.println("Results: " + results); // Debug
+        // System.out.println("Results: " + results); // Debug
         int availableCount = resultCount; // assume this is set somewhere earlier
 
+        long currTime = System.currentTimeMillis();
+
+        long elapsedTime = currTime - prevTime;
+        // System.out.println();
+        System.out.println("Total time taken to search: " + elapsedTime + " ms");
         // Process documents
         for (Document result : results) {
             String docURL = result.getString("url");
@@ -399,8 +348,12 @@ public class QueryEngine {
 
         // Assemble response
         Document data = new Document("results", results);
+        data.append("total_time", elapsedTime);
+        // System.err.println(data);
         // .append("count", resultCount)
         // .append("availableCount", availableCount);
+        // System.err.println("Query comp " );
+        // System.err.println(queryComponents);
 
         return data;
     }
