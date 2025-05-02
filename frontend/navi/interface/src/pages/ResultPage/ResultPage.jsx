@@ -86,35 +86,34 @@ function ResultPage() {
     e.preventDefault();
     setLoading(true);
     setSuggestions([]); // Clear suggestions on search
-    
+
     if (!query || query.trim() === "") {
       setLoading(false);
       return;
     }
-    
+
     try {
       // Step 1: Get search tokens
       const searchResponse = await axios.post(
         `http://localhost:8080/search?query=${encodeURIComponent(query)}`,
         { query }
       );
-      
+
       const searchTokens = searchResponse.data || [];
       setTokens(searchTokens);
       console.log("Search tokens:", searchTokens);
-      
+
       // Step 2: Get search results with the same query
       const resultsResponse = await axios.get(
         `http://localhost:8080/results?query=${encodeURIComponent(query)}`
       );
-      
+
       const responseData = resultsResponse.data || {};
       console.log("Results data:", responseData);
-      
+
       setResults(responseData.results || []);
       setSearchTime(responseData.total_time || 0);
       setResultCount(responseData.results ? responseData.results.length : 0);
-      
     } catch (error) {
       console.error("Error fetching search results:", error);
       setResults([]);
@@ -255,13 +254,15 @@ function ResultPage() {
             <>
               <div className="data">
                 <div className="timeSearching">
-                  You found {resultCount} items related in {searchTime/1000} s
+                  You found {resultCount} items related in {searchTime / 1000} s
                 </div>
               </div>
               <div className="Tokens">
                 <ul className="listTokens">
                   {tokens.map((token, index) => (
-                    <li key={index} className="token">{token}</li>
+                    <li key={index} className="token">
+                      {token}
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -356,6 +357,7 @@ function ResultPage() {
               )}
             </>
           )}
+          {results.length === 0 && <div style={{ flexGrow: 1 }}></div>}
           {!isDarkMode && (
             <img
               src={footer}

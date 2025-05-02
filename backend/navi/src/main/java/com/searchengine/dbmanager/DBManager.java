@@ -7,6 +7,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.function.Function;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,7 +71,9 @@ public class DBManager {
 
     public DBManager() {
         if (mongoClient == null) { // Ensure only one connection is created
-            String connectionString = "mongodb+srv://esraa:navi123searchengine@cluster0.adp56.mongodb.net/";
+            String connectionString = "mongodb://localhost:27017/";
+            // String connectionString =
+            // "mongodb+srv://esraa:navi123searchengine@cluster0.adp56.mongodb.net/";
             ServerApi serverApi = ServerApi.builder()
                     .version(ServerApiVersion.V1)
                     .build();
@@ -128,8 +131,19 @@ public class DBManager {
         }
     }
 
-    public List<Document> getDocumentsByID(List<ObjectId> ids) {
-        return docCollection.find(Filters.in("_id", ids)).into(new ArrayList<>());
+    public List<Document> getDocumentsByIDOrdered(List<ObjectId> ids) {
+        // Fetch all documents with the given IDs
+        List<Document> fetchedDocs = docCollection.find(Filters.in("_id", ids)).into(new ArrayList<>());
+
+        // Create a lookup map from ObjectId to Document
+        Map<ObjectId, Document> docMap = fetchedDocs.stream()
+                .collect(Collectors.toMap(doc -> doc.getObjectId("_id"), Function.identity()));
+
+        // Preserve the input order
+        return ids.stream()
+                .map(docMap::get) // Lookup each ID in the original order
+                .filter(Objects::nonNull) // Optionally remove missing documents
+                .collect(Collectors.toList());
     }
 
     public int getDocumentsCount() {
@@ -678,7 +692,7 @@ public class DBManager {
         // Initialize DBManager
         DBManager dbManager = new DBManager();
         String content = dbManager.getDocContentById("https://chatgpt.com");
-        System.out.println("connntrnt"+content);
+        System.out.println("connntrnt" + content);
         dbManager.close();
     }
 }

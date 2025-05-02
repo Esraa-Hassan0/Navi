@@ -91,10 +91,15 @@ public class QueryEngine {
         boolean isQuoted = query.startsWith("\"") && query.endsWith("\"");
         if (!isQuoted) {
             // Not phrases, just words
-            return new ArrayList<>(tokens.stream()
+
+            tokens = new ArrayList<>(tokens.stream()
                     .filter(token -> !stopWords.contains(token) && !token.isEmpty())
                     .map(stemmer::stem)
                     .collect(Collectors.toList()));
+
+            System.out.println("Tokens ");
+            System.out.println(tokens);
+            return tokens;
         }
         // Process tokens
         int operatorCount = 0;
@@ -152,8 +157,8 @@ public class QueryEngine {
 
         System.out.println("Parsed query: " + result.stream().map(Object::toString).collect(Collectors.joining(" "))); // Debug
         queryComponents = new ArrayList<>(result);
-        System.err.println("Query comp ");
-        System.err.println(queryComponents);
+        // System.err.println("Query comp ");
+        // System.err.println(queryComponents);
         return result;
     }
 
@@ -259,52 +264,56 @@ public class QueryEngine {
     }
 
     public String getSnippet(String docURL) {
-
         String content = dbManager.getDocContentById(docURL);
-
+    
+        // Normalize tokens
         List<String> Tokens = tokens_withoutStemming.stream()
                 .filter(token -> !stopWords.contains(token) && !token.isEmpty())
                 .map(t -> t.replaceAll("\"", ""))
+                .map(String::toLowerCase)
                 .collect(Collectors.toList());
-
+    
         int bestStart = 0;
         int maxCount = 0;
-
+    
+        // Find the window with the most matching tokens (case-insensitive)
         for (int i = 0; i < content.length() - 400; i += 50) {
             int end = Math.min(content.length(), i + 400);
-            String window = content.substring(i, end);
+            String window = content.substring(i, end).toLowerCase(); // lowercase for matching
             int count = 0;
-            if (Tokens.size() > 0)
+    
+            if (!Tokens.isEmpty()) {
                 for (String token : Tokens) {
                     if (window.contains(token)) {
                         count++;
                     }
                 }
-            else
+            } else {
                 for (Object obj : queryComponents) {
-                    String token = (String) obj;
+                    String token = ((String) obj).toLowerCase();
                     if (window.contains(token)) {
                         count++;
                     }
                 }
-
+            }
+    
             if (count > maxCount) {
                 maxCount = count;
                 bestStart = i;
             }
         }
-
+    
         int snippetEnd = Math.min(content.length(), bestStart + 400);
         String snippetRaw = content.substring(bestStart, snippetEnd);
-
-        // Highlight tokens in the original-case snippet
+    
+        // Highlight tokens in the original-case snippet using case-insensitive regex
         for (String token : Tokens) {
-            snippetRaw = snippetRaw.replaceAll("(?i)\\b" + token + "\\b", "<b>" + token + "</b>");
-
+            snippetRaw = snippetRaw.replaceAll("(?i)\\b(" + Pattern.quote(token) + ")\\b", "<b>$1</b>");
         }
-
+    
         return "... " + snippetRaw.trim() + " ...";
     }
+    
 
     @GetMapping("/suggestions")
     public List<String> getSuggestions(@RequestParam("query") String query) {
@@ -317,15 +326,23 @@ public class QueryEngine {
     public Document getResults() {
         long prevTime = System.currentTimeMillis();
 
+        System.out.println("Tokens");
+        for (Object object : tokens) {
+            System.out.println(object);
+        }
+        System.out.println("queryComponents");
+        for (Object object : queryComponents) {
+            System.out.println(object);
+        }
         r = new Ranker(tokens, queryComponents);
-        r.sortDocs();
+        // r.sortDocs();
 
         // Get ranked document IDs
         List<ObjectId> docIds = r.sortDocs();
         System.out.println(docIds.size());
         // Fetch documents using DB manager
         // System.out.println("docIds: " + docIds); // Debug
-        List<Document> results = dbManager.getDocumentsByID(docIds);
+        List<Document> results = dbManager.getDocumentsByIDOrdered(docIds);
         // System.out.println("Results: " + results); // Debug
         int availableCount = resultCount; // assume this is set somewhere earlier
 
@@ -336,14 +353,15 @@ public class QueryEngine {
         System.out.println("Total time taken to search: " + elapsedTime + " ms");
         // Process documents
         for (Document result : results) {
+            System.out.println(result.get("_id"));
             String docURL = result.getString("url");
             String snippet = getSnippet(docURL); // use your actual snippet logic
             result.remove("content");
             result.remove("_id");
             result.append("snippets", snippet);
-            if (snippet == null) {
-                availableCount--;
-            }
+            // if (snippet == null) {
+            // availableCount--;
+            // }
         }
 
         // Assemble response

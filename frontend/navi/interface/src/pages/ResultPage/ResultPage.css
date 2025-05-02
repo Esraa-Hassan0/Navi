@@ -234,8 +234,7 @@
   z-index: 1;
   flex-shrink: 0; /* Prevent shrinking in flex layout */
 }
-suggestions
-.footer.no_items {
+suggestions .footer.no_items {
   margin-left: -3px;
   margin-bottom: -25px;
   min-width: 1512px;
@@ -527,6 +526,10 @@ suggestions
 }
 
 @keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }

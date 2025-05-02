@@ -89,15 +89,17 @@ public class Ranker {
                     + popWeight * popularityScores.getOrDefault(doc, 0.0);
             scores.put(doc, score);
         }
-        for (ObjectId doc : commonDocs) {
-            System.out.println(TEAL + "docId: " + doc + " score: " + scores.get(doc) + RESET);
-        }
+        // for (ObjectId doc : commonDocs) {
+        // System.out.println(TEAL + "docId: " + doc + " score: " + scores.get(doc) +
+        // RESET);
+        // }
     }
 
     public List<ObjectId> sortDocs() {
         long startTime = System.nanoTime();
 
         rank();
+
         List<ObjectId> sortedDocs = new ArrayList<>(commonDocs);
         sortedDocs.sort((id1, id2) -> Double.compare(scores.get(id2), scores.get(id1)));
 
@@ -107,6 +109,9 @@ public class Ranker {
         double durationInMillis = durationInNano / 1_000_000.0;
 
         System.out.println("Time taken: " + durationInMillis + " ms");
+        for (ObjectId doc : sortedDocs) {
+            System.out.println(TEAL + "docId: " + doc + " score: " + scores.get(doc) + RESET);
+        }
         return sortedDocs;
     }
 
@@ -149,13 +154,14 @@ public class Ranker {
             // Calculate all docsFieldLengths
             if (!commonDocs.isEmpty()) {
                 for (ObjectId doc : commonDocs) {
-                    System.out.println("doc " + doc);
+                    // System.out.println("doc " + doc);
                 }
                 docFieldLengths = dbManager.getFieldOccurrencesForDocs(new ArrayList<>(commonDocs));
 
                 for (ObjectId doc : commonDocs) {
                     for (String field : fields) {
-                        System.out.println("doc " + field + " length: " + docFieldLengths.get(doc).get(field));
+                        // System.out.println("doc " + field + " length: " +
+                        // docFieldLengths.get(doc).get(field));
                     }
                 }
             }
@@ -173,7 +179,7 @@ public class Ranker {
 
             // Loop over query terms
             for (String term : terms) {
-                System.out.println(YELLOW + "in term: " + term + RESET);
+                // System.out.println(YELLOW + "in term: " + term + RESET);
                 Double IDF = IDFs.get(term);
                 IDFs.put(term, IDF);
 
@@ -181,7 +187,7 @@ public class Ranker {
                     continue;
                 }
 
-                System.out.println(GREEN + "IDF: " + IDF + RESET);
+                // System.out.println(GREEN + "IDF: " + IDF + RESET);
 
                 // Get postings of the term
                 List<Document> postings = termPostings.get(term);
@@ -191,20 +197,21 @@ public class Ranker {
                     ObjectId docId = posting.getObjectId("docID");
 
                     commonDocs.add(docId);
-                    System.out.print(RED + "in doc " + docId + RESET);
+                    // System.out.print(RED + "in doc " + docId + RESET);
 
                     double totalScore = 0.0;
 
                     for (int i = 0; i < 4; i++) {
-                        System.out.print(PURPLE + "in fields" + RESET );
+                        // System.out.print(PURPLE + "in fields" + RESET );
 
-                        System.out.print(
-                                GREEN + fields[i] + " length: " + docFieldLengths.get(docId).get(fields[i]) + RESET);
+                        // System.out.print(
+                        // GREEN + fields[i] + " length: " + docFieldLengths.get(docId).get(fields[i]) +
+                        // RESET);
 
                         Document types = (Document) posting.get("types");
 
                         int TF = types.getInteger(fields[i], 0);
-                        System.out.print(GREEN + "TF: " + TF + RESET);
+                        // System.out.print(GREEN + "TF: " + TF + RESET);
 
                         if (TF < 1) {
                             continue;
@@ -238,7 +245,7 @@ public class Ranker {
                     IDF = Math.log10((docsCount - DF + 0.5) / (DF + 0.5));
                 }
 
-                System.out.println(GREEN + "DF: " + DF + RESET);
+                // System.out.println(GREEN + "DF: " + DF + RESET);
 
                 IDFs.put(term, IDF);
             }
@@ -249,7 +256,8 @@ public class Ranker {
         void PageRank() {
             popularityScores = dbManager.getPageRanks(new ArrayList<>(commonDocs));
             for (ObjectId docId : commonDocs) {
-                System.out.println(GREEN + "doc: " + docId + " pageRank: " + popularityScores.get(docId) + RESET);
+                // System.out.println(GREEN + "doc: " + docId + " pageRank: " +
+                // popularityScores.get(docId) + RESET);
             }
         }
     }
