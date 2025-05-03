@@ -231,7 +231,6 @@ public class Ranker {
                 for (Document posting : postings) {
                     ObjectId docId = posting.getObjectId("docID");
 
-                    // commonDocs.add(docId);
                     // System.out.print(RED + "in doc " + docId + RESET);
 
                     double totalScore = 0.0;
@@ -298,6 +297,7 @@ public class Ranker {
             long startTime = System.nanoTime();
 
             popularityScores = dbManager.getPageRanks(new ArrayList<>(commonDocs));
+
             // for (ObjectId docId : commonDocs) {
             // // System.out.println(GREEN + "doc: " + docId + " pageRank: " +
             // // popularityScores.get(docId) + RESET);
@@ -309,7 +309,6 @@ public class Ranker {
 
             System.out.println("Time taken in retrieving page rank: " + durationInMillis + " ms");
         }
-
     }
 
     // this funcction has to fill relevanceScores and commonDocs

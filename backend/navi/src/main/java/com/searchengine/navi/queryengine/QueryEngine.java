@@ -272,7 +272,7 @@ public class QueryEngine {
                 .map(t -> t.replaceAll("\"", ""))
                 .map(String::toLowerCase)
                 .collect(Collectors.toList());
-
+    
         int bestStart = 0;
         int maxCount = 0;
 
@@ -302,7 +302,7 @@ public class QueryEngine {
                 bestStart = i;
             }
         }
-
+    
         int snippetEnd = Math.min(content.length(), bestStart + 400);
         String snippetRaw = content.substring(bestStart, snippetEnd);
 
@@ -310,9 +310,10 @@ public class QueryEngine {
         for (String token : Tokens) {
             snippetRaw = snippetRaw.replaceAll("(?i)\\b(" + Pattern.quote(token) + ")\\b", "<b>$1</b>");
         }
-
+    
         return "... " + snippetRaw.trim() + " ...";
     }
+    
 
     @GetMapping("/suggestions")
     public List<String> getSuggestions(@RequestParam("query") String query) {
@@ -378,6 +379,7 @@ public class QueryEngine {
     // For testing
     public static void main(String[] args) {
         QueryEngine engine = new QueryEngine();
+       engine.parseQuery("string");
         String[] queries = {
                 "\"Football player scores\"",
                 "Football player scores",

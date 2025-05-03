@@ -110,7 +110,7 @@ public class Indexer {
     }
 
     public void tokenizeText(String text, HashMap<String, Token> tokenMap, ObjectId docId, String type) {
-        String restructureText = text.toLowerCase().replaceAll("[^a-zA-Z0-9\\s]", "");
+        String restructureText = text.toLowerCase().replaceAll("[^a-zA-Z\\s]", "");
         String[] arrList = restructureText.split("\\s+");
         System.out.println(TEAL + "Tokens before filtering (" + type + "): " + Arrays.toString(arrList) + RESET);
         int counter = 0;
