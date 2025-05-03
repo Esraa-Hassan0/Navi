@@ -20,6 +20,7 @@
   .rshape,
   .lshape,
   .bshape {
+    /* width: 100px; */
     position: absolute;
     z-index: -1;
   }
@@ -30,11 +31,13 @@
   }
   
   .lshape {
-    top: 0;
+    bottom: 0;
     left: 0;
   }
   
   .bshape {
+    margin-bottom: -20px;
+    width: 10000px;
     bottom: 0;
     left: 50%;
     transform: translateX(-50%);

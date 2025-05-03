@@ -16,6 +16,8 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
+
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
@@ -24,6 +26,7 @@ import com.google.gson.Gson;
 import com.searchengine.dbmanager.DBManager;
 
 import ch.qos.logback.core.joran.sanity.Pair;
+import opennlp.tools.stemmer.PorterStemmer;
 
 public class Indexer {
     static final String RESET = "\u001B[0m";
@@ -34,6 +37,7 @@ public class Indexer {
     static final String PURPLE = "\u001B[35m";
 
     String FIELD_COUNTS_PATH = "field_counts.json"; // JSON file to store fields lengths
+    private static final Pattern NON_ALPHANUMERIC = Pattern.compile("[^a-zA-Z\\s]");
 
     static DBManager dbmanager;
     private HashSet<String> stopWords;
@@ -85,7 +89,7 @@ public class Indexer {
 
         String h1Tags = doc.getString("h1");
         String h2Tags = doc.getString("h2");
-        String anchorTags = doc.getString("children");
+        String anchorTags = doc.getString("a");
 
         // System.out.println(PURPLE + "H1 Tags: " + h1Tags.text() + RESET);
         // tokenizeText(h1Tags.text(), tokenMap, docId, "h1");
@@ -103,28 +107,30 @@ public class Indexer {
         tokenizeText(h2Tags, tokenMap, docId, "h2");
 
         // System.out.println(PURPLE + "Anchor Tags: " + anchorTags + RESET);
-        // tokenizeText(anchorTags, tokenMap, docId, "a");
+        tokenizeText(anchorTags, tokenMap, docId, "a");
 
         tokenizeText(text, tokenMap, docId, "other");
         return tokenMap;
     }
 
     public void tokenizeText(String text, HashMap<String, Token> tokenMap, ObjectId docId, String type) {
-        String restructureText = text.toLowerCase().replaceAll("[^a-zA-Z\\s]", "");
+        // String restructureText = text.toLowerCase().replaceAll("[^a-zA-Z\\s]", "");
+        String restructureText = NON_ALPHANUMERIC.matcher(text.toLowerCase()).replaceAll("");
         String[] arrList = restructureText.split("\\s+");
         System.out.println(TEAL + "Tokens before filtering (" + type + "): " + Arrays.toString(arrList) + RESET);
         int counter = 0;
 
-        Stemmer languageStemmer = new Stemmer();
+        PorterStemmer stemmer = new PorterStemmer();
 
         for (String s : arrList) {
             // to be stemmed
             String tokenStr = s.trim();
             System.out.println(GREEN + "===========BEFORE STEMMING===========\n" + PURPLE + tokenStr + RESET);
-            tokenStr = languageStemmer.stemWord(tokenStr);
-            System.out.println(GREEN + "===========AFTER STEMMING============\n" + YELLOW + tokenStr + RESET);
-
+            // tokenStr = languageStemmer.stemWord(tokenStr);
+            
             if (!tokenStr.isEmpty() && !stopWords.contains(tokenStr)) {
+                tokenStr = stemmer.stem(tokenStr);
+                System.out.println(GREEN + "===========AFTER STEMMING============\n" + YELLOW + tokenStr + RESET);
                 counter++;
                 Token token = tokenMap.get(tokenStr);
                 if (token == null) {

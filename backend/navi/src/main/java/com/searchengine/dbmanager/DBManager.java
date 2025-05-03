@@ -51,6 +51,7 @@ import com.mongodb.client.model.Filters;
 import com.mongodb.client.model.InsertOneModel;
 import com.mongodb.client.model.Projections;
 import com.mongodb.client.model.UpdateOneModel;
+import com.mongodb.client.model.UpdateOptions;
 import com.mongodb.client.model.WriteModel;
 import com.mongodb.client.model.Field;
 import org.bson.conversions.Bson;
@@ -325,111 +326,44 @@ public class DBManager {
 
     public void insertIntoInvertedIndex(HashMap<String, Token> invertedIndex) {
         List<WriteModel<Document>> bulkOperations = new ArrayList<>();
-        int insertCount = 0;
         int updateCount = 0;
 
-        // First, fetch all existing words to check what's already in the database
-        Set<String> wordsToProcess = invertedIndex.keySet();
-        MongoCursor<Document> existingDocs = invertedIndexCollection
-                .find(new Document("word", new Document("$in", new ArrayList<>(wordsToProcess))))
-                .iterator();
-
-        // Create a map of existing words for quick lookup
-        Map<String, Document> existingWordsMap = new HashMap<>();
-        while (existingDocs.hasNext()) {
-            Document doc = existingDocs.next();
-            existingWordsMap.put(doc.getString("word"), doc);
-        }
-
-        // Process each word
-        for (String word : wordsToProcess) {
-            Token token = invertedIndex.get(word);
+        for (Map.Entry<String, Token> entry : invertedIndex.entrySet()) {
+            String word = entry.getKey();
+            Token token = entry.getValue();
             ArrayList<Document> postingsList = new ArrayList<>();
 
-            // Create a posting document for each Token
+            // Create postings
             for (Posting posting : token.getPostings()) {
                 Map<String, Integer> typesMap = posting.getTypeCounts();
                 Document postingDoc = new Document()
-                        .append("docID", posting.getDocID()) // Must be ObjectId
+                        .append("docID", posting.getDocID())
                         .append("TF", posting.getTF())
                         .append("types", typesMap);
-
                 postingsList.add(postingDoc);
             }
 
-            // Check if the word already exists in the database
-            if (existingWordsMap.containsKey(word)) {
-                // Word exists, prepare update operation
-                Document existingDoc = existingWordsMap.get(word);
-                @SuppressWarnings("unchecked")
-                List<Document> existingPostings = (List<Document>) existingDoc.get("postings");
+            // Prepare upsert operation
+            bulkOperations.add(
+                    new UpdateOneModel<>(
+                            new Document("word", word),
+                            new Document("$set", new Document("postings", postingsList)),
+                            new UpdateOptions().upsert(true)));
+            updateCount++;
 
-                // Create a map of existing postings by docID for quick lookup
-                Map<ObjectId, Document> docIdToPosting = new HashMap<>();
-                for (Document existingPosting : existingPostings) {
-                    docIdToPosting.put(existingPosting.getObjectId("docID"), existingPosting);
-                }
-
-                // Process new postings - update existing or add new ones
-                List<Document> updatedPostings = new ArrayList<>(existingPostings);
-                for (Document newPosting : postingsList) {
-                    ObjectId docId = newPosting.getObjectId("docID");
-
-                    if (docIdToPosting.containsKey(docId)) {
-                        // Update existing posting
-                        Document existingPosting = docIdToPosting.get(docId);
-                        int existingTF = existingPosting.getInteger("TF");
-                        int newTF = newPosting.getInteger("TF");
-
-                        // Update TF
-                        existingPosting.put("TF", existingTF + newTF);
-
-                        // Merge type counts
-                        @SuppressWarnings("unchecked")
-                        Map<String, Integer> existingTypes = (Map<String, Integer>) existingPosting.get("types");
-                        @SuppressWarnings("unchecked")
-                        Map<String, Integer> newTypes = (Map<String, Integer>) newPosting.get("types");
-
-                        for (String type : newTypes.keySet()) {
-                            existingTypes.put(type, existingTypes.getOrDefault(type, 0) + newTypes.get(type));
-                        }
-
-                        existingPosting.put("types", existingTypes);
-                    } else {
-                        // Add new posting
-                        updatedPostings.add(newPosting);
-                    }
-                }
-
-                // Create update operation
-                bulkOperations.add(
-                        new UpdateOneModel<>(
-                                new Document("word", word),
-                                new Document("$set", new Document("postings", updatedPostings))));
-                updateCount++;
-            } else {
-                // Word doesn't exist, prepare insert operation
-                Document indexDoc = new Document()
-                        .append("word", word)
-                        .append("postings", postingsList);
-
-                bulkOperations.add(new InsertOneModel<>(indexDoc));
-                insertCount++;
-            }
-
-            // Execute bulk operations in batches
+            // Execute in batches
             if (bulkOperations.size() >= 1000) {
                 executeBulkOperations(bulkOperations);
                 bulkOperations.clear();
             }
         }
 
-        // Execute any remaining operations
+        // Execute remaining operations
         if (!bulkOperations.isEmpty()) {
             executeBulkOperations(bulkOperations);
         }
 
-        System.out.println("Indexing completed. Inserted: " + insertCount + ", Updated: " + updateCount + " documents");
+        System.out.println("Indexing completed. Updated: " + updateCount + " documents");
     }
 
     private void executeBulkOperations(List<WriteModel<Document>> operations) {
@@ -438,25 +372,23 @@ public class DBManager {
             BulkWriteResult result = invertedIndexCollection.bulkWrite(operations, options);
             System.out.println("Bulk operation executed: " +
                     result.getInsertedCount() + " inserted, " +
-                    result.getModifiedCount() + " modified");
+                    result.getModifiedCount() + " modified, " +
+                    result.getUpserts().size() + " upserted");
         } catch (MongoBulkWriteException e) {
             System.err.println("Bulk write error: " + e.getMessage());
-            // Process write errors if needed
-            List<BulkWriteError> writeErrors = e.getWriteErrors();
-            for (BulkWriteError error : writeErrors) {
-                System.err.println("Error at index " + error.getIndex() + ": " + error.getMessage());
-            }
+            e.getWriteErrors().forEach(
+                    error -> System.err.println("Error at index " + error.getIndex() + ": " + error.getMessage()));
+            // Optionally skip failed operations and continue
         } catch (Exception e) {
             System.err.println("Error during bulk write: " + e.getMessage());
             e.printStackTrace();
         }
     }
-
     // Fetch all content when is_indexed is false
 
     public FindIterable<Document> getUnindexedDocuments() {
         Document filter = new Document("isIndexed", false);
-        Document projection = new Document("content", 1).append("h1", 1).append("h2", 1).append("children", 1).append(
+        Document projection = new Document("content", 1).append("h1", 1).append("h2", 1).append("a", 1).append(
                 "url",
                 1);
         FindIterable<Document> result = docCollection.find(filter).projection(projection);

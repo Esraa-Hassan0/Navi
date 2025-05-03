@@ -72,6 +72,9 @@ public class QueryEngine {
 
     @PostMapping("/search")
     public ArrayList<String> parseQuery(@RequestParam("query") String query) {
+        tokens.clear();
+        tokens_withoutStemming.clear();
+        queryComponents.clear();
         if (query == null || query.trim().isEmpty()) {
             return new ArrayList<>();
         }
@@ -79,9 +82,8 @@ public class QueryEngine {
 
         ArrayList<String> result = new ArrayList<>();
         PorterStemmer stemmer = new PorterStemmer();
-        tokens_withoutStemming = tokenizeQuery(query);
         query = query.trim().toLowerCase();
-
+        
         // Split query into tokens (phrases and operators)
         tokens = tokenizeQuery(query);
         if (tokens == null) {
@@ -91,7 +93,8 @@ public class QueryEngine {
         boolean isQuoted = query.startsWith("\"") && query.endsWith("\"");
         if (!isQuoted) {
             // Not phrases, just words
-
+            
+            tokens_withoutStemming = tokenizeQuery(query);
             tokens = new ArrayList<>(tokens.stream()
                     .filter(token -> !stopWords.contains(token) && !token.isEmpty())
                     .map(stemmer::stem)
@@ -218,33 +221,6 @@ public class QueryEngine {
         return tokens;
     }
 
-    // private String processPhrase(String phrase, PorterStemmer stemmer) {
-    // List<String> processed = new ArrayList<>();
-    // // Clean and split phrase
-    // String cleaned = phrase.replaceAll("[^a-z0-9\\s]", "");
-    // String[] words = cleaned.split("\\s+");
-
-    // // Stem and filter stop words
-    // for (String word : words) {
-    // if (!word.isEmpty()) {
-    // String stemmed = stemmer.stem(word);
-    // if (!stopWords.contains(stemmed) && !stemmed.isEmpty()) {
-    // processed.add(stemmed);
-    // }
-    // }
-    // }
-    // StringBuilder sb = new StringBuilder();
-    // for (String word : processed) {
-    // sb.append(word).append(" ");
-    // }
-    // // Remove trailing space
-    // if (sb.length() > 0) {
-    // sb.setLength(sb.length() - 1); // Remove last space
-    // }
-    // // Return the processed phrase as a single string
-    // return sb.toString();
-    // }
-
     private boolean isOperator(String token) {
         return token.equalsIgnoreCase("and") ||
                 token.equalsIgnoreCase("or") ||
@@ -272,7 +248,7 @@ public class QueryEngine {
                 .map(t -> t.replaceAll("\"", ""))
                 .map(String::toLowerCase)
                 .collect(Collectors.toList());
-    
+
         int bestStart = 0;
         int maxCount = 0;
 
@@ -283,6 +259,7 @@ public class QueryEngine {
             int count = 0;
 
             if (!Tokens.isEmpty()) {
+                System.out.println(Tokens.get(0));
                 for (String token : Tokens) {
                     if (window.contains(token)) {
                         count++;
@@ -290,6 +267,7 @@ public class QueryEngine {
                 }
             } else {
                 for (Object obj : queryComponents) {
+                    // System.err.println(queryComponents.get(0).toString());
                     String token = ((String) obj).toLowerCase();
                     if (window.contains(token)) {
                         count++;
@@ -302,7 +280,7 @@ public class QueryEngine {
                 bestStart = i;
             }
         }
-    
+
         int snippetEnd = Math.min(content.length(), bestStart + 400);
         String snippetRaw = content.substring(bestStart, snippetEnd);
 
@@ -310,10 +288,12 @@ public class QueryEngine {
         for (String token : Tokens) {
             snippetRaw = snippetRaw.replaceAll("(?i)\\b(" + Pattern.quote(token) + ")\\b", "<b>$1</b>");
         }
-    
+        for (Object token : queryComponents) {
+            snippetRaw = snippetRaw.replaceAll("(?i)(" + Pattern.quote(token.toString()) + ")", "<b>$1</b>");
+        }
+
         return "... " + snippetRaw.trim() + " ...";
     }
-    
 
     @GetMapping("/suggestions")
     public List<String> getSuggestions(@RequestParam("query") String query) {
@@ -334,6 +314,7 @@ public class QueryEngine {
         for (Object object : queryComponents) {
             System.out.println(object);
         }
+        // if(queryComponents.size())
         r = new Ranker(tokens, queryComponents);
         // r.sortDocs();
 
@@ -377,19 +358,19 @@ public class QueryEngine {
     }
 
     // For testing
-    public static void main(String[] args) {
-        QueryEngine engine = new QueryEngine();
-       engine.parseQuery("string");
-        String[] queries = {
-                "\"Football player scores\"",
-                "Football player scores",
-                "\"Football player\" OR \"Tennis player\"",
-                "\"Football player\" AND \"Cricket star\" NOT \"Soccer star\""
-        };
-        for (String query : queries) {
-            System.out.println("Query: " + query);
-            System.out.println("Parsed: " + engine.parseQuery(query));
-            System.out.println();
-        }
-    }
+    // public static void main(String[] args) {
+    // QueryEngine engine = new QueryEngine();
+    // engine.parseQuery("string");
+    // String[] queries = {
+    // "\"Football player scores\"",
+    // "Football player scores",
+    // "\"Football player\" OR \"Tennis player\"",
+    // "\"Football player\" AND \"Cricket star\" NOT \"Soccer star\""
+    // };
+    // for (String query : queries) {
+    // System.out.println("Query: " + query);
+    // System.out.println("Parsed: " + engine.parseQuery(query));
+    // System.out.println();
+    // }
+    // }
 }
