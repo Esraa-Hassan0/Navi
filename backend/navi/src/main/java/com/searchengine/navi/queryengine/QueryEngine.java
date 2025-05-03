@@ -265,23 +265,23 @@ public class QueryEngine {
 
     public String getSnippet(String docURL) {
         String content = dbManager.getDocContentById(docURL);
-    
+
         // Normalize tokens
         List<String> Tokens = tokens_withoutStemming.stream()
                 .filter(token -> !stopWords.contains(token) && !token.isEmpty())
                 .map(t -> t.replaceAll("\"", ""))
                 .map(String::toLowerCase)
                 .collect(Collectors.toList());
-    
+
         int bestStart = 0;
         int maxCount = 0;
-    
+
         // Find the window with the most matching tokens (case-insensitive)
         for (int i = 0; i < content.length() - 400; i += 50) {
             int end = Math.min(content.length(), i + 400);
             String window = content.substring(i, end).toLowerCase(); // lowercase for matching
             int count = 0;
-    
+
             if (!Tokens.isEmpty()) {
                 for (String token : Tokens) {
                     if (window.contains(token)) {
@@ -296,24 +296,23 @@ public class QueryEngine {
                     }
                 }
             }
-    
+
             if (count > maxCount) {
                 maxCount = count;
                 bestStart = i;
             }
         }
-    
+
         int snippetEnd = Math.min(content.length(), bestStart + 400);
         String snippetRaw = content.substring(bestStart, snippetEnd);
-    
+
         // Highlight tokens in the original-case snippet using case-insensitive regex
         for (String token : Tokens) {
             snippetRaw = snippetRaw.replaceAll("(?i)\\b(" + Pattern.quote(token) + ")\\b", "<b>$1</b>");
         }
-    
+
         return "... " + snippetRaw.trim() + " ...";
     }
-    
 
     @GetMapping("/suggestions")
     public List<String> getSuggestions(@RequestParam("query") String query) {

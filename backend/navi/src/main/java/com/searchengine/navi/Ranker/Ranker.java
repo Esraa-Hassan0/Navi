@@ -14,6 +14,12 @@ import org.bson.Document;
 import org.jsoup.Jsoup;
 import org.springframework.data.mongodb.core.aggregation.ArrayOperators.In;
 import org.bson.types.ObjectId;
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.lang.reflect.Type;
 
 public class Ranker {
     static final String RESET = "\u001B[0m";
@@ -30,6 +36,11 @@ public class Ranker {
     private HashSet<ObjectId> commonDocs;
     private double relWeight = 0.7;
     private double popWeight = 0.3;
+
+    String FIELD_COUNTS_PATH = "field_counts.json";
+
+    Relevance relevance;
+    Popularity popularity;
 
     // Phrase matching
 
@@ -48,15 +59,15 @@ public class Ranker {
         docsCount = dbManager.getDocumentsCount();
         System.out.println(GREEN + "Docs No.: " + docsCount + RESET);
 
+        relevance = new Relevance();
+        popularity = new Popularity();
+
         // phrase matching
 
         this.phraseComponents = phraseComponents;
     }
 
     void rank() {
-        Relevance relevance = new Relevance();
-        Popularity popularity = new Popularity();
-
         if (phraseComponents != null && !phraseComponents.isEmpty()) {
             if (phraseComponents.size() == 1 && phraseComponents.get(0) instanceof String) {
                 // Single phrase query
@@ -89,10 +100,6 @@ public class Ranker {
                     + popWeight * popularityScores.getOrDefault(doc, 0.0);
             scores.put(doc, score);
         }
-        // for (ObjectId doc : commonDocs) {
-        // System.out.println(TEAL + "docId: " + doc + " score: " + scores.get(doc) +
-        // RESET);
-        // }
     }
 
     public List<ObjectId> sortDocs() {
@@ -109,9 +116,12 @@ public class Ranker {
         double durationInMillis = durationInNano / 1_000_000.0;
 
         System.out.println("Time taken: " + durationInMillis + " ms");
+
         for (ObjectId doc : sortedDocs) {
-            System.out.println(TEAL + "docId: " + doc + " score: " + scores.get(doc) + RESET);
+            System.out.println(TEAL + "docId: " + doc + " score: " + scores.get(doc) +
+                    RESET);
         }
+
         return sortedDocs;
     }
 
@@ -127,7 +137,30 @@ public class Ranker {
         Relevance() {
             IDFs = new HashMap<>();
             avgDocFieldsLengths = new double[4];
-            HashMap<String, Integer> fieldCounts = dbManager.getAllFieldsCount();
+            long startTime = System.nanoTime();
+
+            Gson gson = new Gson();
+
+            HashMap<String, Integer> fieldCounts;
+            try (FileReader reader = new FileReader(FIELD_COUNTS_PATH)) {
+                Type type = new TypeToken<HashMap<String, Integer>>() {
+                }.getType();
+                fieldCounts = gson.fromJson(reader, type);
+                if (fieldCounts == null) {
+                    fieldCounts = new HashMap<>();
+                }
+            } catch (IOException e) {
+                System.err.println("Failed to load counts, starting empty: " +
+                        e.getMessage());
+                fieldCounts = new HashMap<>();
+            }
+
+            long endTime = System.nanoTime();
+
+            long durationInNano = endTime - startTime;
+            double durationInMillis = durationInNano / 1_000_000.0;
+
+            System.out.println("Time taken in get all fields count: " + durationInMillis + " ms");
 
             for (int i = 0; i < 4; i++) {
                 avgDocFieldsLengths[i] = fieldCounts.getOrDefault(fields[i], 0) / (double) docsCount;
@@ -153,29 +186,31 @@ public class Ranker {
 
             // Calculate all docsFieldLengths
             if (!commonDocs.isEmpty()) {
-                for (ObjectId doc : commonDocs) {
-                    // System.out.println("doc " + doc);
-                }
+                long startTime2 = System.nanoTime();
+
                 docFieldLengths = dbManager.getFieldOccurrencesForDocs(new ArrayList<>(commonDocs));
 
-                for (ObjectId doc : commonDocs) {
-                    for (String field : fields) {
-                        // System.out.println("doc " + field + " length: " +
-                        // docFieldLengths.get(doc).get(field));
-                    }
-                }
+                long endTime2 = System.nanoTime();
+
+                long durationInNano2 = endTime2 - startTime2;
+                double durationInMillis2 = durationInNano2 / 1_000_000.0;
+
+                System.out.println("Time taken in fields occurences: " + durationInMillis2 + " ms");
             }
+
             long endTime = System.nanoTime();
 
             long durationInNano = endTime - startTime;
             double durationInMillis = durationInNano / 1_000_000.0;
 
-            System.out.println("Time taken: " + durationInMillis + " ms");
+            System.out.println("Time taken in initializing: " + durationInMillis + " ms");
         }
 
         void BM25F() {
             // HashMap<Integer, ArrayList<Integer>> docFieldLength = new HashMap<>();
             initializeRankParams();
+
+            long startTime = System.nanoTime();
 
             // Loop over query terms
             for (String term : terms) {
@@ -196,7 +231,7 @@ public class Ranker {
                 for (Document posting : postings) {
                     ObjectId docId = posting.getObjectId("docID");
 
-                    commonDocs.add(docId);
+                    // commonDocs.add(docId);
                     // System.out.print(RED + "in doc " + docId + RESET);
 
                     double totalScore = 0.0;
@@ -219,12 +254,18 @@ public class Ranker {
 
                         double score = calculateFieldScore(docFieldLengths.get(docId).get(fields[i]), TF, i, IDF);
                         totalScore += score;
-                        System.out.println(GREEN + "Score: " + score + RESET);
+                        // System.out.println(GREEN + "Score: " + score + RESET);
 
                     }
                     relevanceScores.put(docId, totalScore);
                 }
             }
+            long endTime = System.nanoTime();
+
+            long durationInNano = endTime - startTime;
+            double durationInMillis = durationInNano / 1_000_000.0;
+
+            System.out.println("Time taken in ranking: " + durationInMillis + " ms");
         }
 
         double calculateFieldScore(int docLength, int TF, int field, double IDF) {
@@ -254,12 +295,21 @@ public class Ranker {
 
     class Popularity {
         void PageRank() {
+            long startTime = System.nanoTime();
+
             popularityScores = dbManager.getPageRanks(new ArrayList<>(commonDocs));
-            for (ObjectId docId : commonDocs) {
-                // System.out.println(GREEN + "doc: " + docId + " pageRank: " +
-                // popularityScores.get(docId) + RESET);
-            }
+            // for (ObjectId docId : commonDocs) {
+            // // System.out.println(GREEN + "doc: " + docId + " pageRank: " +
+            // // popularityScores.get(docId) + RESET);
+            // }
+            long endTime = System.nanoTime();
+
+            long durationInNano = endTime - startTime;
+            double durationInMillis = durationInNano / 1_000_000.0;
+
+            System.out.println("Time taken in retrieving page rank: " + durationInMillis + " ms");
         }
+
     }
 
     // this funcction has to fill relevanceScores and commonDocs
@@ -526,7 +576,9 @@ public class Ranker {
         // terms.add("alyaa");
         // terms.add("hi");
         // terms.add("hey");
-        terms.add("Google Cloud newsletter Stay");
+        terms.add("sky");
+        terms.add("night");
+        terms.add("day");
         ArrayList<Object> queryComponents2 = new ArrayList<>();
 
         // queryComponents2.add("NOT");
@@ -537,17 +589,19 @@ public class Ranker {
         // queryComponents2.add("OR");
         // queryComponents2.add(" Learn more about the LinkedIn Professional
         // Community");
-        System.out.println("terms");
-        for (Object object : terms) {
-            System.out.println(object);
-        }
-        System.out.println("queryComponents2");
-        for (Object object : queryComponents2) {
-            System.out.println(object);
-        }
+        // System.out.println("terms");
+        // for (Object object : terms) {
+        // System.out.println(object);
+        // }
+        // System.out.println("queryComponents2");
+        // for (Object object : queryComponents2) {
+        // System.out.println(object);
+        // }
         Ranker r = new Ranker(terms, queryComponents2);
 
         List<ObjectId> docs = r.sortDocs();
+
+        System.out.println("Results No.: " + docs.size());
 
         // for (ObjectId doc : docs) {
         // System.out.println(doc + "=================");

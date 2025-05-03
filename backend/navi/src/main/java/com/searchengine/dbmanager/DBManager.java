@@ -237,6 +237,11 @@ public class DBManager {
 
     public HashMap<String, Integer> getAllFieldsCount() {
         HashMap<String, Integer> fieldCounts = new HashMap<>();
+        List<String> fields = Arrays.asList("h1", "h2", "a", "other");
+        for (String field : fields) {
+            fieldCounts.put(field, 0);
+        }
+
         try {
             Iterable<Document> results = invertedIndexCollection.aggregate(Arrays.asList(
                     new Document("$unwind", "$postings"),

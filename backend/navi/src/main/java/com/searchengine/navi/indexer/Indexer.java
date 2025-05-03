@@ -8,6 +8,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.Buffer;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -19,6 +20,7 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
+import com.google.gson.Gson;
 import com.searchengine.dbmanager.DBManager;
 
 import ch.qos.logback.core.joran.sanity.Pair;
@@ -31,7 +33,9 @@ public class Indexer {
     static final String GREEN = "\u001B[32m";
     static final String PURPLE = "\u001B[35m";
 
-    DBManager dbmanager;
+    String FIELD_COUNTS_PATH = "field_counts.json"; // JSON file to store fields lengths
+
+    static DBManager dbmanager;
     private HashSet<String> stopWords;
     HashMap<String, Token> tokenMap = new HashMap<>();
 
@@ -161,8 +165,19 @@ public class Indexer {
         dbmanager.close();
     }
 
+    public void storeFieldCounts() {
+        HashMap<String, Integer> avgFieldCounts = new HashMap<>();
+        Gson gson = new Gson();
+
+        avgFieldCounts = dbmanager.getAllFieldsCount();
+        try (FileWriter writer = new FileWriter(FIELD_COUNTS_PATH)) {
+            gson.toJson(avgFieldCounts, writer);
+        } catch (IOException e) {
+            System.err.println("Failed to save averages: " + e.getMessage());
+        }
+    }
+
     public static void main(String[] args) {
-        DBManager dbmanager = new DBManager();
         System.out.println(GREEN + "Starting tokenization..." + RESET);
         try {
             // Document doc =
