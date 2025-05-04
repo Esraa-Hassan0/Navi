@@ -52,6 +52,7 @@ import com.mongodb.client.model.InsertOneModel;
 import com.mongodb.client.model.Projections;
 import com.mongodb.client.model.UpdateOneModel;
 import com.mongodb.client.model.UpdateOptions;
+import com.mongodb.client.model.Updates;
 import com.mongodb.client.model.WriteModel;
 import com.mongodb.client.result.UpdateResult;
 import com.mongodb.client.model.Field;
@@ -337,6 +338,18 @@ public class DBManager {
     // Insert Inverted Index to the db
 
     // For now it is limited to 10 docs till we finalize our structure
+    public void appendTagCounts( ObjectId id, int h1Count, int h2Count,
+            int aCount,int otherCount) {
+        docCollection.updateOne(
+                Filters.eq("_id", id),
+                Updates.combine(
+                        Updates.set("h1Count", h1Count),
+                        Updates.set("h2Count", h2Count),
+                        Updates.set("ACount", aCount),
+                        Updates.set("otherCount", otherCount)
+                        )
+                        );
+    }
 
     public void insertIntoInvertedIndex(HashMap<String, Token> invertedIndex) {
         List<WriteModel<Document>> bulkOperations = new ArrayList<>();
@@ -350,7 +363,7 @@ public class DBManager {
                 Map<String, Integer> typesMap = posting.getTypeCounts();
                 Document postingDoc = new Document()
                         .append("docID", posting.getDocID())
-                        .append("TF", posting.getTF())
+                        // .append("TF", posting.getTF()) //No Need 
                         .append("types", typesMap);
 
                 // Check if a posting for this docID already exists
@@ -427,7 +440,7 @@ public class DBManager {
      * @param id  The ID of the document to retrieve (used if URL is null or empty)
      * @return Document containing the content or null if not found
      */
-    public String getDocContentById(String url) {
+    public String getDocContentByURL(String url) {
         try {
             Document filter = null;
 
@@ -454,6 +467,99 @@ public class DBManager {
             }
         } catch (MongoException e) {
             logger.error("Error retrieving document content: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
+    public String getDocAnchorById(String url) {
+        try {
+            Document filter = null;
+
+            // Determine which filter to use based on provided parameters
+            if (url != null && !url.trim().isEmpty()) {
+                // If URL is provided, use it as the primary search criteria
+                filter = new Document("url", url);
+            }
+
+            // Define which fields to retrieve
+            Document projection = new Document()
+                    .append("a", 1);
+
+            // Find and return the document
+            Document result = docCollection.find(filter)
+                    .projection(projection)
+                    .first();
+
+            if (result != null) {
+                return result.getString("a");
+            } else {
+                logger.warn("No document found with {} {}");
+                return null;
+            }
+        } catch (MongoException e) {
+            logger.error("Error retrieving document a: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
+    public String getDocH1ById(String url) {
+        try {
+            Document filter = null;
+
+            // Determine which filter to use based on provided parameters
+            if (url != null && !url.trim().isEmpty()) {
+                // If URL is provided, use it as the primary search criteria
+                filter = new Document("url", url);
+            }
+
+            // Define which fields to retrieve
+            Document projection = new Document()
+                    .append("h1", 1);
+
+            // Find and return the document
+            Document result = docCollection.find(filter)
+                    .projection(projection)
+                    .first();
+
+            if (result != null) {
+                return result.getString("h1");
+            } else {
+                logger.warn("No document found with {} {}");
+                return null;
+            }
+        } catch (MongoException e) {
+            logger.error("Error retrieving document h1: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
+    public String getDocH2ById(String url) {
+        try {
+            Document filter = null;
+
+            // Determine which filter to use based on provided parameters
+            if (url != null && !url.trim().isEmpty()) {
+                // If URL is provided, use it as the primary search criteria
+                filter = new Document("url", url);
+            }
+
+            // Define which fields to retrieve
+            Document projection = new Document()
+                    .append("h2", 1);
+
+            // Find and return the document
+            Document result = docCollection.find(filter)
+                    .projection(projection)
+                    .first();
+
+            if (result != null) {
+                return result.getString("h2");
+            } else {
+                logger.warn("No document found with {} {}");
+                return null;
+            }
+        } catch (MongoException e) {
+            logger.error("Error retrieving document h2: {}", e.getMessage(), e);
             return null;
         }
     }

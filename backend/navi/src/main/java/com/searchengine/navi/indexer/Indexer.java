@@ -14,6 +14,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
@@ -65,6 +66,53 @@ public class Indexer {
         public ArrayList<Posting> getPostings() {
             return postings;
         }
+    }
+
+    public void calcFields(Document doc) {
+        String url = doc.getString("url");
+        ObjectId id = doc.getObjectId("_id");
+
+        String a = dbmanager.getDocAnchorById(url);
+        String H1 = dbmanager.getDocH1ById(url);
+        String H2 = dbmanager.getDocH2ById(url);
+        String content = dbmanager.getDocContentByURL(url);
+
+
+        // Remove stopwords
+        a = removeStopwords(a, stopWords);
+        H1 = removeStopwords(H1, stopWords);
+        H2 = removeStopwords(H2, stopWords);
+        content = removeStopwords(content, stopWords);
+
+        int ACount = countWords(a);
+        int H1Count = countWords(H1);
+        int H2Count = countWords(H2);
+        int otherCount = countWords(content)-ACount-H1Count-H2Count;
+
+        dbmanager.appendTagCounts(id, H1Count, H2Count, ACount,otherCount);
+
+    }
+
+    public String removeStopwords(String content, Set<String> stopWords) {
+        StringBuilder result = new StringBuilder();
+        String[] words = content.split("\\s+");
+
+        for (String word : words) {
+            String cleaned = word.replaceAll("[^a-zA-Z]", "").toLowerCase();
+            if (!stopWords.contains(cleaned)) {
+                result.append(word).append(" ");
+            }
+        }
+
+        return result.toString().trim();
+    }
+
+    public static int countWords(String text) {
+        if (text == null || text.trim().isEmpty()) {
+            return 0;
+        }
+        String[] words = text.trim().split("\\s+");
+        return words.length;
     }
 
     public HashMap<String, Token> tokenizeDocument(Document doc, HashMap<String, Token> tokenMap) {
