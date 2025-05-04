@@ -75,6 +75,7 @@ public class Indexer {
         String url = doc.getString("url");
         ObjectId docId = dbmanager.retrieveDocID(url);
         String text = doc.getString("content");
+        String title = doc.getString("title");
 
         // System.out.println(PURPLE);
         // System.out.println(text);
@@ -102,6 +103,7 @@ public class Indexer {
 
         System.out.println(PURPLE + "H1 Tags: " + h1Tags + RESET);
         tokenizeText(h1Tags, tokenMap, docId, "h1");
+        tokenizeText(title, tokenMap, docId, "h1");
 
         System.out.println(PURPLE + "H2 Tags: " + h2Tags + RESET);
         tokenizeText(h2Tags, tokenMap, docId, "h2");
