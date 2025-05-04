@@ -333,7 +333,6 @@ public class DBManager {
             Token token = entry.getValue();
             ArrayList<Document> postingsList = new ArrayList<>();
 
-            // Create postings
             for (Posting posting : token.getPostings()) {
                 Map<String, Integer> typesMap = posting.getTypeCounts();
                 Document postingDoc = new Document()
@@ -343,7 +342,6 @@ public class DBManager {
                 postingsList.add(postingDoc);
             }
 
-            // Prepare upsert operation
             bulkOperations.add(
                     new UpdateOneModel<>(
                             new Document("word", word),
@@ -351,14 +349,12 @@ public class DBManager {
                             new UpdateOptions().upsert(true)));
             updateCount++;
 
-            // Execute in batches
-            if (bulkOperations.size() >= 1000) {
+            if (bulkOperations.size() >= 500) { // Reduce batch size to 500
                 executeBulkOperations(bulkOperations);
                 bulkOperations.clear();
             }
         }
 
-        // Execute remaining operations
         if (!bulkOperations.isEmpty()) {
             executeBulkOperations(bulkOperations);
         }
@@ -577,6 +573,18 @@ public class DBManager {
         }
         System.out.println("Total documents in database: " + allDocIds.size());
         return allDocIds;
+    }
+
+    public void markDocumentAsIndexed(String url) {
+        try {
+            Document query = new Document("url", url);
+            Document update = new Document("$set", new Document("isIndexed", true));
+            docCollection.updateOne(query, update);
+            System.out.println("Marked document as indexed: " + url);
+        } catch (Exception e) {
+            System.err.println("Error marking document as indexed for URL " + url + ": " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     // Optional: Close the connection

@@ -39,6 +39,7 @@ public class Indexer {
     String FIELD_COUNTS_PATH = "field_counts.json"; // JSON file to store fields lengths
     private static final Pattern NON_ALPHANUMERIC = Pattern.compile("[^a-zA-Z\\s]");
 
+    PorterStemmer stemmer = new PorterStemmer();
     static DBManager dbmanager;
     private HashSet<String> stopWords;
     HashMap<String, Token> tokenMap = new HashMap<>();
@@ -119,18 +120,21 @@ public class Indexer {
         String[] arrList = restructureText.split("\\s+");
         System.out.println(TEAL + "Tokens before filtering (" + type + "): " + Arrays.toString(arrList) + RESET);
         int counter = 0;
-
-        PorterStemmer stemmer = new PorterStemmer();
-
+        // Stemmer languageStemmer = new Stemmer();
         for (String s : arrList) {
             // to be stemmed
             String tokenStr = s.trim();
             System.out.println(GREEN + "===========BEFORE STEMMING===========\n" + PURPLE + tokenStr + RESET);
             // tokenStr = languageStemmer.stemWord(tokenStr);
-            
-            if (!tokenStr.isEmpty() && !stopWords.contains(tokenStr)) {
+            try {
                 tokenStr = stemmer.stem(tokenStr);
-                System.out.println(GREEN + "===========AFTER STEMMING============\n" + YELLOW + tokenStr + RESET);
+                System.out.println("Stemmed '" + "' to '" + tokenStr + "'");
+            } catch (Exception e) {
+                System.err.println("Error stemming '" + tokenStr + "': " + e.getMessage());
+            }
+            System.out.println(GREEN + "===========AFTER STEMMING============\n" + YELLOW + tokenStr + RESET);
+
+            if (!tokenStr.isEmpty() && !stopWords.contains(tokenStr)) {
                 counter++;
                 Token token = tokenMap.get(tokenStr);
                 if (token == null) {
@@ -155,7 +159,7 @@ public class Indexer {
 
     public void addStopWords() {
         try {
-            BufferedReader scanner = new BufferedReader(new FileReader("Data/stopwords.txt"));
+            BufferedReader scanner = new BufferedReader(new FileReader("backend/navi/Data/stopWords.txt"));
             String line;
             while ((line = scanner.readLine()) != null) {
                 stopWords.add(line.trim());
