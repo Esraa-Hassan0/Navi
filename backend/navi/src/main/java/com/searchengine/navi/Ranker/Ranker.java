@@ -103,6 +103,10 @@ public class Ranker {
     }
 
     public List<ObjectId> sortDocs() {
+        System.out.println("Tokens:");
+        for (String term : terms) {
+            System.out.println(term);
+        }
         long startTime = System.nanoTime();
 
         rank();
@@ -297,7 +301,6 @@ public class Ranker {
             long startTime = System.nanoTime();
 
             popularityScores = dbManager.getPageRanks(new ArrayList<>(commonDocs));
-
             // for (ObjectId docId : commonDocs) {
             // // System.out.println(GREEN + "doc: " + docId + " pageRank: " +
             // // popularityScores.get(docId) + RESET);
@@ -309,6 +312,7 @@ public class Ranker {
 
             System.out.println("Time taken in retrieving page rank: " + durationInMillis + " ms");
         }
+
     }
 
     // this funcction has to fill relevanceScores and commonDocs
@@ -575,9 +579,9 @@ public class Ranker {
         // terms.add("alyaa");
         // terms.add("hi");
         // terms.add("hey");
-        terms.add("sky");
-        terms.add("night");
-        terms.add("day");
+        terms.add("polici");
+        // terms.add("these");
+        // terms.add("term");
         ArrayList<Object> queryComponents2 = new ArrayList<>();
 
         // queryComponents2.add("NOT");

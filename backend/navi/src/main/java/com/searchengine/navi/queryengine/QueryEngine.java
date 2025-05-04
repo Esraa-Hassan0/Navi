@@ -83,7 +83,7 @@ public class QueryEngine {
         ArrayList<String> result = new ArrayList<>();
         PorterStemmer stemmer = new PorterStemmer();
         query = query.trim().toLowerCase();
-        
+
         // Split query into tokens (phrases and operators)
         tokens = tokenizeQuery(query);
         if (tokens == null) {
@@ -93,7 +93,7 @@ public class QueryEngine {
         boolean isQuoted = query.startsWith("\"") && query.endsWith("\"");
         if (!isQuoted) {
             // Not phrases, just words
-            
+
             tokens_withoutStemming = tokenizeQuery(query);
             tokens = new ArrayList<>(tokens.stream()
                     .filter(token -> !stopWords.contains(token) && !token.isEmpty())

@@ -1,11 +1,14 @@
 package com.searchengine.navi.indexer;
 
+import java.io.FileWriter;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
 import org.bson.Document;
+
+import com.google.gson.Gson;
 import com.mongodb.client.FindIterable;
 import com.mongodb.client.MongoCursor;
 import com.searchengine.dbmanager.DBManager;
@@ -16,6 +19,8 @@ public class Main {
     static Indexer indexer = new Indexer();
     static final int BATCH_SIZE = 10; // Adjust based on testing
     private static final java.util.logging.Logger logger = java.util.logging.Logger.getLogger(Main.class.getName());
+
+    static String FIELD_COUNTS_PATH = "field_counts.json"; // JSON file to store fields lengths
 
     public static void main(String[] args) {
         long startTime = System.currentTimeMillis();
@@ -30,6 +35,18 @@ public class Main {
         }
         long endTime = System.currentTimeMillis();
         logger.info("Total indexing time: " + (endTime - startTime) + " ms");
+    }
+
+    private static void storeFieldCounts() {
+        HashMap<String, Integer> avgFieldCounts = new HashMap<>();
+        Gson gson = new Gson();
+
+        avgFieldCounts = db.getAllFieldsCount();
+        try (FileWriter writer = new FileWriter(FIELD_COUNTS_PATH)) {
+            gson.toJson(avgFieldCounts, writer);
+        } catch (IOException e) {
+            System.err.println("Failed to save averages: " + e.getMessage());
+        }
     }
 
     private static void processDocumentsInBatches() throws IOException {
@@ -109,6 +126,7 @@ public class Main {
             if (cursor != null)
                 cursor.close();
             logger.info("Cursor closed. Batch processing completed.");
+            storeFieldCounts();
         }
     }
 }

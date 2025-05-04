@@ -36,7 +36,6 @@ public class Indexer {
     static final String GREEN = "\u001B[32m";
     static final String PURPLE = "\u001B[35m";
 
-    String FIELD_COUNTS_PATH = "field_counts.json"; // JSON file to store fields lengths
     private static final Pattern NON_ALPHANUMERIC = Pattern.compile("[^a-zA-Z\\s]");
 
     PorterStemmer stemmer = new PorterStemmer();
@@ -173,18 +172,6 @@ public class Indexer {
 
     public void close() {
         dbmanager.close();
-    }
-
-    public void storeFieldCounts() {
-        HashMap<String, Integer> avgFieldCounts = new HashMap<>();
-        Gson gson = new Gson();
-
-        avgFieldCounts = dbmanager.getAllFieldsCount();
-        try (FileWriter writer = new FileWriter(FIELD_COUNTS_PATH)) {
-            gson.toJson(avgFieldCounts, writer);
-        } catch (IOException e) {
-            System.err.println("Failed to save averages: " + e.getMessage());
-        }
     }
 
     public static void main(String[] args) {

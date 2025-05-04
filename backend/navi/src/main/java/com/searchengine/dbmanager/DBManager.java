@@ -188,50 +188,63 @@ public class DBManager {
     }
 
     public Map<ObjectId, Map<String, Integer>> getFieldOccurrencesForDocs(List<ObjectId> docIds) {
-        Map<ObjectId, Map<String, Integer>> result = new HashMap<>();
-        String fields[] = { "h1", "h2", "a", "other" };
+        if (docIds == null || docIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
 
-        // Aggregation pipeline
-        List<Bson> pipeline = Arrays.asList(
-                // Unwind the postings array
+        // Use unmodifiable set for fields (immutable, thread-safe)
+        final Set<String> fields = Set.of("h1", "h2", "a", "other");
+        // Pre-size the result map to avoid resizing
+        Map<ObjectId, Map<String, Integer>> result = new HashMap<>(docIds.size());
+
+        // Initialize default field map to avoid repeated creation
+        Map<String, Integer> defaultFieldMap = fields.stream()
+                .collect(Collectors.toMap(
+                        field -> field,
+                        field -> 0,
+                        (a, b) -> a,
+                        () -> new HashMap<>(fields.size())));
+
+        // Optimize pipeline with projection to reduce data transfer
+        List<Bson> pipeline = List.of(
                 Aggregates.unwind("$postings"),
-                // Match postings where docID is in the input list
                 Aggregates.match(Filters.in("postings.docID", docIds)),
-                // Project to extract docID and types
-                Aggregates.project(new Document("_id", 0)
-                        .append("docID", "$postings.docID")
-                        .append("types", "$postings.types")),
-                // Convert types to an array of key-value pairs using
-                Aggregates.addFields(
-                        new Field<>("types", new Document("$objectToArray", "$types"))),
-                // Unwind the types array
-                Aggregates.unwind("$types"),
-                // Group by docID and field name, summing the frequencies
                 Aggregates.group(
-                        new Document("docID", "$docID").append("field", ".k"),
-                        Accumulators.sum("total", "$types.v")));
+                        "$postings.docID",
+                        Accumulators.sum("h1", new Document("$ifNull", List.of("$postings.types.h1", 0))),
+                        Accumulators.sum("h2", new Document("$ifNull", List.of("$postings.types.h2", 0))),
+                        Accumulators.sum("a", new Document("$ifNull", List.of("$postings.types.a", 0))),
+                        Accumulators.sum("other", new Document("$ifNull", List.of("$postings.types.other", 0)))),
+                Aggregates.project(new Document("_id", 1)
+                        .append("h1", 1)
+                        .append("h2", 1)
+                        .append("a", 1)
+                        .append("other", 1)));
 
-        // Execute aggregation
-        try {
-            for (Document doc : invertedIndexCollection.aggregate(pipeline)) {
-                Document id = (Document) doc.get("_id");
-                ObjectId docId = id.getObjectId("docID");
-                String field = id.getString("field");
-                int total = doc.getInteger("total");
+        try (MongoCursor<Document> cursor = invertedIndexCollection
+                .aggregate(pipeline)
+                .batchSize(1000)
+                .allowDiskUse(true) // Allow disk use for large datasets
+                .iterator()) {
 
-                result.computeIfAbsent(docId, k -> new HashMap<>()).put(field, total);
+            while (cursor.hasNext()) {
+                Document doc = cursor.next();
+                ObjectId docId = doc.getObjectId("_id");
+
+                // Create field map only once per document
+                Map<String, Integer> fieldMap = new HashMap<>(fields.size());
+                fields.forEach(field -> fieldMap.put(field, doc.getInteger(field, 0)));
+
+                result.put(docId, fieldMap);
             }
-        } catch (Exception e) {
-            System.out.println("Error in aggregation: " + e.getMessage());
+        } catch (MongoException e) {
+            // Log error properly instead of printing to stderr
+            logger.error("Aggregation failed for docIds: {}", docIds, e);
+            return Collections.emptyMap(); // Or throw a custom exception
         }
 
-        // Ensure all input docIds are in the result, even if they have no postings
-        for (ObjectId docId : docIds) {
-            Map<String, Integer> fieldOccurrences = result.computeIfAbsent(docId, k -> new HashMap<>());
-            for (String field : fields) {
-                fieldOccurrences.putIfAbsent(field, 0);
-            }
-        }
+        // Ensure all input docIds are represented efficiently
+        docIds.forEach(docId -> result.computeIfAbsent(docId, k -> new HashMap<>(defaultFieldMap)));
 
         return result;
     }
