@@ -240,7 +240,7 @@ public class QueryEngine {
     }
 
     public String getSnippet(String docURL) {
-        String content = dbManager.getDocContentById(docURL);
+        String content = dbManager.getDocContentByURL(docURL);
 
         // Normalize tokens
         List<String> Tokens = tokens_withoutStemming.stream()

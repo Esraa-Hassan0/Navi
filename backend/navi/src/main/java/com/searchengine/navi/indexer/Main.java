@@ -74,6 +74,7 @@ public class Main {
                             try {
                                 logger.info("Tokenizing document: " + document.getString("url"));
                                 indexer.tokenizeDocument(document, invertedIndex);
+                                indexer.calcFields(document);
                             } catch (Exception e) {
                                 logger.severe("Error tokenizing document " + document.getString("url") + ": "
                                         + e.getMessage());

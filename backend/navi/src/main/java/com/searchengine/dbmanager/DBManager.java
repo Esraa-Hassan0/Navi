@@ -52,7 +52,9 @@ import com.mongodb.client.model.InsertOneModel;
 import com.mongodb.client.model.Projections;
 import com.mongodb.client.model.UpdateOneModel;
 import com.mongodb.client.model.UpdateOptions;
+import com.mongodb.client.model.Updates;
 import com.mongodb.client.model.WriteModel;
+import com.mongodb.client.result.UpdateResult;
 import com.mongodb.client.model.Field;
 import org.bson.conversions.Bson;
 import static com.mongodb.client.model.Aggregates.*;
@@ -336,6 +338,18 @@ public class DBManager {
     // Insert Inverted Index to the db
 
     // For now it is limited to 10 docs till we finalize our structure
+    public void appendTagCounts( ObjectId id, int h1Count, int h2Count,
+            int aCount,int otherCount) {
+        docCollection.updateOne(
+                Filters.eq("_id", id),
+                Updates.combine(
+                        Updates.set("h1Count", h1Count),
+                        Updates.set("h2Count", h2Count),
+                        Updates.set("ACount", aCount),
+                        Updates.set("otherCount", otherCount)
+                        )
+                        );
+    }
 
     public void insertIntoInvertedIndex(HashMap<String, Token> invertedIndex) {
         List<WriteModel<Document>> bulkOperations = new ArrayList<>();
@@ -344,25 +358,33 @@ public class DBManager {
         for (Map.Entry<String, Token> entry : invertedIndex.entrySet()) {
             String word = entry.getKey();
             Token token = entry.getValue();
-            ArrayList<Document> postingsList = new ArrayList<>();
 
             for (Posting posting : token.getPostings()) {
                 Map<String, Integer> typesMap = posting.getTypeCounts();
                 Document postingDoc = new Document()
                         .append("docID", posting.getDocID())
-                        .append("TF", posting.getTF())
+                        // .append("TF", posting.getTF()) //No Need 
                         .append("types", typesMap);
-                postingsList.add(postingDoc);
+
+                // Check if a posting for this docID already exists
+                bulkOperations.add(
+                        new UpdateOneModel<>(
+                                new Document("word", word)
+                                        .append("postings.docID", new Document("$ne", posting.getDocID())),
+                                new Document("$push", new Document("postings", postingDoc)),
+                                new UpdateOptions().upsert(true)));
+
+                // If the docID exists, update its TF and types
+                bulkOperations.add(
+                        new UpdateOneModel<>(
+                                new Document("word", word)
+                                        .append("postings.docID", posting.getDocID()),
+                                new Document("$set", new Document("postings.$", postingDoc)),
+                                new UpdateOptions().upsert(true)));
+                updateCount++;
             }
 
-            bulkOperations.add(
-                    new UpdateOneModel<>(
-                            new Document("word", word),
-                            new Document("$set", new Document("postings", postingsList)),
-                            new UpdateOptions().upsert(true)));
-            updateCount++;
-
-            if (bulkOperations.size() >= 500) { // Reduce batch size to 500
+            if (bulkOperations.size() >= 500) { // Process in batches of 500
                 executeBulkOperations(bulkOperations);
                 bulkOperations.clear();
             }
@@ -418,7 +440,7 @@ public class DBManager {
      * @param id  The ID of the document to retrieve (used if URL is null or empty)
      * @return Document containing the content or null if not found
      */
-    public String getDocContentById(String url) {
+    public String getDocContentByURL(String url) {
         try {
             Document filter = null;
 
@@ -445,6 +467,99 @@ public class DBManager {
             }
         } catch (MongoException e) {
             logger.error("Error retrieving document content: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
+    public String getDocAnchorById(String url) {
+        try {
+            Document filter = null;
+
+            // Determine which filter to use based on provided parameters
+            if (url != null && !url.trim().isEmpty()) {
+                // If URL is provided, use it as the primary search criteria
+                filter = new Document("url", url);
+            }
+
+            // Define which fields to retrieve
+            Document projection = new Document()
+                    .append("a", 1);
+
+            // Find and return the document
+            Document result = docCollection.find(filter)
+                    .projection(projection)
+                    .first();
+
+            if (result != null) {
+                return result.getString("a");
+            } else {
+                logger.warn("No document found with {} {}");
+                return null;
+            }
+        } catch (MongoException e) {
+            logger.error("Error retrieving document a: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
+    public String getDocH1ById(String url) {
+        try {
+            Document filter = null;
+
+            // Determine which filter to use based on provided parameters
+            if (url != null && !url.trim().isEmpty()) {
+                // If URL is provided, use it as the primary search criteria
+                filter = new Document("url", url);
+            }
+
+            // Define which fields to retrieve
+            Document projection = new Document()
+                    .append("h1", 1);
+
+            // Find and return the document
+            Document result = docCollection.find(filter)
+                    .projection(projection)
+                    .first();
+
+            if (result != null) {
+                return result.getString("h1");
+            } else {
+                logger.warn("No document found with {} {}");
+                return null;
+            }
+        } catch (MongoException e) {
+            logger.error("Error retrieving document h1: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
+    public String getDocH2ById(String url) {
+        try {
+            Document filter = null;
+
+            // Determine which filter to use based on provided parameters
+            if (url != null && !url.trim().isEmpty()) {
+                // If URL is provided, use it as the primary search criteria
+                filter = new Document("url", url);
+            }
+
+            // Define which fields to retrieve
+            Document projection = new Document()
+                    .append("h2", 1);
+
+            // Find and return the document
+            Document result = docCollection.find(filter)
+                    .projection(projection)
+                    .first();
+
+            if (result != null) {
+                return result.getString("h2");
+            } else {
+                logger.warn("No document found with {} {}");
+                return null;
+            }
+        } catch (MongoException e) {
+            logger.error("Error retrieving document h2: {}", e.getMessage(), e);
             return null;
         }
     }
@@ -600,6 +715,25 @@ public class DBManager {
         }
     }
 
+    public long resetIndexedStatus() {
+        try {
+            // Use updateMany to set isIndexed to false for all documents
+            Document filter = new Document(); // Empty filter matches all documents
+            Document update = new Document("$set", new Document("isIndexed", false));
+            UpdateOptions options = new UpdateOptions().upsert(false); // No upsert needed
+
+            UpdateResult result = docCollection.updateMany(filter, update, options);
+            long modifiedCount = result.getModifiedCount();
+
+            System.out.println("Reset isIndexed to false for " + modifiedCount + " documents.");
+            return modifiedCount;
+        } catch (Exception e) {
+            System.err.println("Error resetting isIndexed status: " + e.getMessage());
+            e.printStackTrace();
+            return 0;
+        }
+    }
+
     // Optional: Close the connection
     /**
      * Safely closes the MongoDB connection
@@ -649,8 +783,9 @@ public class DBManager {
     public static void main(String[] args) {
         // Initialize DBManager
         DBManager dbManager = new DBManager();
-        String content = dbManager.getDocContentById("https://chatgpt.com");
-        System.out.println("connntrnt" + content);
+        // String content = dbManager.getDocContentById("https://chatgpt.com");
+        // System.out.println("connntrnt" + content);
+        dbManager.resetIndexedStatus();
         dbManager.close();
     }
 }
