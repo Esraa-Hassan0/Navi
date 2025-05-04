@@ -128,7 +128,7 @@ public class Indexer {
             System.out.println(GREEN + "===========BEFORE STEMMING===========\n" + PURPLE + tokenStr + RESET);
             // tokenStr = languageStemmer.stemWord(tokenStr);
             try {
-                tokenStr = stemmer.stem(tokenStr);
+
                 System.out.println("Stemmed '" + "' to '" + tokenStr + "'");
             } catch (Exception e) {
                 System.err.println("Error stemming '" + tokenStr + "': " + e.getMessage());
@@ -136,6 +136,7 @@ public class Indexer {
             System.out.println(GREEN + "===========AFTER STEMMING============\n" + YELLOW + tokenStr + RESET);
 
             if (!tokenStr.isEmpty() && !stopWords.contains(tokenStr)) {
+                tokenStr = stemmer.stem(tokenStr);
                 counter++;
                 Token token = tokenMap.get(tokenStr);
                 if (token == null) {
