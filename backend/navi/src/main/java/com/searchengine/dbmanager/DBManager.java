@@ -399,7 +399,7 @@ public class DBManager {
         Document filter = new Document("isIndexed", false);
         Document projection = new Document("content", 1).append("h1", 1).append("h2", 1).append("a", 1).append(
                 "url",
-                1);
+                1).append("title", 1);
         FindIterable<Document> result = docCollection.find(filter).projection(projection);
 
         if (result != null) {
