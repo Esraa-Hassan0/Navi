@@ -133,10 +133,10 @@ public class Indexer {
             } catch (Exception e) {
                 System.err.println("Error stemming '" + tokenStr + "': " + e.getMessage());
             }
-            System.out.println(GREEN + "===========AFTER STEMMING============\n" + YELLOW + tokenStr + RESET);
 
             if (!tokenStr.isEmpty() && !stopWords.contains(tokenStr)) {
                 tokenStr = stemmer.stem(tokenStr);
+                System.out.println(GREEN + "===========AFTER STEMMING============\n" + YELLOW + tokenStr + RESET);
                 counter++;
                 Token token = tokenMap.get(tokenStr);
                 if (token == null) {
