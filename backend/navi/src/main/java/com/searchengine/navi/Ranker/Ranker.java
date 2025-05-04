@@ -351,9 +351,28 @@ public class Ranker {
                     String tag = entry.getKey();
                     double weight = entry.getValue();
 
-                    String fieldText = tag.equals("body") ? doc.getString("content") : doc.getString(tag);
-                    fieldText = fieldText.toLowerCase().trim().replaceAll("\\s+", " ");
+                    String fieldText;
+                    if (tag.equals("h1")) {
+                        // Combine h1 and title fields
+                        String h1Text = doc.getString("h1");
+                        String titleText = doc.getString("title");
+                        // Use h1, title, or both (concatenate if both exist)
+                        if (h1Text != null && titleText != null) {
+                            fieldText = h1Text + " " + titleText;
+                        } else {
+                            fieldText = h1Text != null ? h1Text : titleText != null ? titleText : "";
+                        }
+                    } else if (tag.equals("body")) {
+                        fieldText = doc.getString("content");
+                    } else {
+                        fieldText = doc.getString(tag);
+                    }
 
+                    if (fieldText == null || fieldText.isEmpty()) {
+                        continue;
+                    }
+
+                    fieldText = fieldText.toLowerCase().trim().replaceAll("\\s+", " ");
                     Matcher matcher = pattern.matcher(fieldText);
                     int freq = 0;
                     while (matcher.find()) {
@@ -381,7 +400,6 @@ public class Ranker {
             }
         }
     }
-
     // Rank boolean operators
 
     void rankBoolPhrase() {

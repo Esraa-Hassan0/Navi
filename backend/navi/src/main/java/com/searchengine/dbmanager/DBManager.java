@@ -338,17 +338,15 @@ public class DBManager {
     // Insert Inverted Index to the db
 
     // For now it is limited to 10 docs till we finalize our structure
-    public void appendTagCounts( ObjectId id, int h1Count, int h2Count,
-            int aCount,int otherCount) {
+    public void appendTagCounts(ObjectId id, int h1Count, int h2Count,
+            int aCount, int otherCount) {
         docCollection.updateOne(
                 Filters.eq("_id", id),
                 Updates.combine(
                         Updates.set("h1Count", h1Count),
                         Updates.set("h2Count", h2Count),
                         Updates.set("ACount", aCount),
-                        Updates.set("otherCount", otherCount)
-                        )
-                        );
+                        Updates.set("otherCount", otherCount)));
     }
 
     public void insertIntoInvertedIndex(HashMap<String, Token> invertedIndex) {
@@ -363,7 +361,7 @@ public class DBManager {
                 Map<String, Integer> typesMap = posting.getTypeCounts();
                 Document postingDoc = new Document()
                         .append("docID", posting.getDocID())
-                        // .append("TF", posting.getTF()) //No Need 
+                        // .append("TF", posting.getTF()) //No Need
                         .append("types", typesMap);
 
                 // Check if a posting for this docID already exists
@@ -675,7 +673,8 @@ public class DBManager {
                         phrase, "i"),
                 Filters.regex("h2",
                         phrase, "i"),
-                Filters.regex("a", phrase, "i"));
+                Filters.regex("a", phrase, "i"),
+                Filters.regex("title", phrase, "i"));
 
         // Execute query with debugging
         ArrayList<Document> docs = docCollection.find(filter)
@@ -683,7 +682,7 @@ public class DBManager {
                         .append("url", 1)
                         .append("h1", 1)
                         .append("h2", 1)
-                        .append("a", 1))
+                        .append("a", 1).append("title", 1))
                 .batchSize(1000)
                 .into(new ArrayList<>());
 
