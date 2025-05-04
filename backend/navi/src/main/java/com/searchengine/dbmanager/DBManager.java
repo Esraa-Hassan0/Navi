@@ -53,6 +53,7 @@ import com.mongodb.client.model.Projections;
 import com.mongodb.client.model.UpdateOneModel;
 import com.mongodb.client.model.UpdateOptions;
 import com.mongodb.client.model.WriteModel;
+import com.mongodb.client.result.UpdateResult;
 import com.mongodb.client.model.Field;
 import org.bson.conversions.Bson;
 import static com.mongodb.client.model.Aggregates.*;
@@ -344,7 +345,6 @@ public class DBManager {
         for (Map.Entry<String, Token> entry : invertedIndex.entrySet()) {
             String word = entry.getKey();
             Token token = entry.getValue();
-            ArrayList<Document> postingsList = new ArrayList<>();
 
             for (Posting posting : token.getPostings()) {
                 Map<String, Integer> typesMap = posting.getTypeCounts();
@@ -352,17 +352,26 @@ public class DBManager {
                         .append("docID", posting.getDocID())
                         .append("TF", posting.getTF())
                         .append("types", typesMap);
-                postingsList.add(postingDoc);
+
+                // Check if a posting for this docID already exists
+                bulkOperations.add(
+                        new UpdateOneModel<>(
+                                new Document("word", word)
+                                        .append("postings.docID", new Document("$ne", posting.getDocID())),
+                                new Document("$push", new Document("postings", postingDoc)),
+                                new UpdateOptions().upsert(true)));
+
+                // If the docID exists, update its TF and types
+                bulkOperations.add(
+                        new UpdateOneModel<>(
+                                new Document("word", word)
+                                        .append("postings.docID", posting.getDocID()),
+                                new Document("$set", new Document("postings.$", postingDoc)),
+                                new UpdateOptions().upsert(true)));
+                updateCount++;
             }
 
-            bulkOperations.add(
-                    new UpdateOneModel<>(
-                            new Document("word", word),
-                            new Document("$set", new Document("postings", postingsList)),
-                            new UpdateOptions().upsert(true)));
-            updateCount++;
-
-            if (bulkOperations.size() >= 500) { // Reduce batch size to 500
+            if (bulkOperations.size() >= 500) { // Process in batches of 500
                 executeBulkOperations(bulkOperations);
                 bulkOperations.clear();
             }
@@ -600,6 +609,25 @@ public class DBManager {
         }
     }
 
+    public long resetIndexedStatus() {
+        try {
+            // Use updateMany to set isIndexed to false for all documents
+            Document filter = new Document(); // Empty filter matches all documents
+            Document update = new Document("$set", new Document("isIndexed", false));
+            UpdateOptions options = new UpdateOptions().upsert(false); // No upsert needed
+
+            UpdateResult result = docCollection.updateMany(filter, update, options);
+            long modifiedCount = result.getModifiedCount();
+
+            System.out.println("Reset isIndexed to false for " + modifiedCount + " documents.");
+            return modifiedCount;
+        } catch (Exception e) {
+            System.err.println("Error resetting isIndexed status: " + e.getMessage());
+            e.printStackTrace();
+            return 0;
+        }
+    }
+
     // Optional: Close the connection
     /**
      * Safely closes the MongoDB connection
@@ -649,8 +677,9 @@ public class DBManager {
     public static void main(String[] args) {
         // Initialize DBManager
         DBManager dbManager = new DBManager();
-        String content = dbManager.getDocContentById("https://chatgpt.com");
-        System.out.println("connntrnt" + content);
+        // String content = dbManager.getDocContentById("https://chatgpt.com");
+        // System.out.println("connntrnt" + content);
+        dbManager.resetIndexedStatus();
         dbManager.close();
     }
 }
