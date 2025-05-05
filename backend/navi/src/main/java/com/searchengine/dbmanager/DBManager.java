@@ -39,6 +39,7 @@ import com.mongodb.bulk.BulkWriteError;
 import com.mongodb.bulk.BulkWriteResult;
 import com.mongodb.client.AggregateIterable;
 import com.mongodb.client.FindIterable;
+import com.mongodb.client.ListIndexesIterable;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoCollection;
@@ -48,6 +49,8 @@ import com.mongodb.client.model.Accumulators;
 import com.mongodb.client.model.Aggregates;
 import com.mongodb.client.model.BulkWriteOptions;
 import com.mongodb.client.model.Filters;
+import com.mongodb.client.model.IndexOptions;
+import com.mongodb.client.model.Indexes;
 import com.mongodb.client.model.InsertOneModel;
 import com.mongodb.client.model.Projections;
 import com.mongodb.client.model.UpdateOneModel;
@@ -59,6 +62,8 @@ import com.mongodb.client.model.Field;
 import org.bson.conversions.Bson;
 import static com.mongodb.client.model.Aggregates.*;
 import static com.mongodb.client.model.Accumulators.*;
+
+import com.searchengine.navi.crawler.Url;
 import com.searchengine.navi.indexer.Indexer.Token;
 import com.searchengine.navi.indexer.Posting;
 
@@ -71,6 +76,7 @@ public class DBManager {
     private MongoCollection<Document> docCollection;
     private MongoCollection<Document> queriesCollection;
     private boolean isShuttingDown;
+    private static final int BATCH_SIZE = 200;
 
     public DBManager() {
         if (mongoClient == null) { // Ensure only one connection is created
@@ -93,7 +99,33 @@ public class DBManager {
                 invertedIndexCollection = DB.getCollection("inverted index"); // Fixed typo
                 queriesCollection = DB.getCollection("queries"); // Fixed typo
                 docCollection = DB.getCollection("doc");
-
+                try {
+                    ListIndexesIterable<Document> indexes = docCollection.listIndexes();
+                    boolean urlIndexExists = false;
+                    for (Document index : indexes) {
+                        String indexName = index.getString("name");
+                        if ("url_1".equals(indexName)) {
+                            urlIndexExists = true;
+                            Document key = index.get("key", Document.class);
+                            if (key != null && key.containsKey("url") && !index.containsKey("unique")) {
+                                docCollection.dropIndex("url_1");
+                                docCollection.createIndex(Indexes.ascending("url"), new IndexOptions().unique(true));
+                                logger.info("Recreated unique index on 'url'");
+                            }
+                            break;
+                        }
+                    }
+                    if (!urlIndexExists) {
+                        docCollection.createIndex(Indexes.ascending("url"), new IndexOptions().unique(true));
+                        logger.info("Created unique index on 'url'");
+                    }
+                    docCollection.createIndex(Indexes.ascending("hashingDoc"));
+                    docCollection.createIndex(Indexes.ascending("children"));
+                    docCollection.createIndex(Indexes.ascending("parents"));
+                    docCollection.createIndex(Indexes.ascending("rank"));
+                } catch (MongoException e) {
+                    logger.warn("Failed to create index: {}, proceeding without it", e.getMessage());
+                }
                 System.out.println("✅ Successfully connected to MongoDB!\n\n\n");
             } catch (MongoException e) {
                 e.printStackTrace();
@@ -788,6 +820,355 @@ public class DBManager {
             e.printStackTrace();
             return 0;
         }
+    }
+    public void insertBatch(List<Url> urls) {
+        try {
+            List<Document> documents = urls.stream().map(url -> new Document()
+                    .append("url", url.getUrl())
+                    .append("title", url.getTitle())
+                    .append("content", url.getContent())
+                    .append("hashingDoc", url.getHashingDoc())
+                    // .append("urlsIn", url.getUrlsIn())
+                    // .append("urlsOut", url.getUrlsOut())
+                    .append("baseUrl", url.getBaseUrl())
+                    .append("parents", url.getParents())
+                    .append("children", url.getChildren())
+                    .append("isIndexed", url.isIndexed())
+                    .append("lastTime", url.getLastTime())
+                    .append("rank", url.getRank())
+                    .append("a", url.getChildTXt())
+                    .append("h1", url.getH1())
+                    .append("h2", url.getH2())
+                    .append("etag", url.getEtag())
+                    .append("lastModified", url.getLastModified())).collect(Collectors.toList());
+            docCollection.insertMany(documents);
+            logger.info("Successfully inserted {} documents into MongoDB.", documents.size());
+        } catch (MongoException e) {
+            logger.error("Failed to insert batch: {}", e.getMessage());
+            throw new RuntimeException("Failed to insert batch into MongoDB", e);
+        }
+    }
+
+    // public void updateBatch(List<Url> urls) {
+    //     try {
+    //         int updatedCount = 0;
+    //         for (Url url : urls) {
+    //             Bson filter = Filters.eq("url", url.getUrl());
+    //             Bson update = Updates.combine(
+    //                     Updates.set("title", url.getTitle()),
+    //                     Updates.set("content", url.getContent()),
+    //                     Updates.set("hashingDoc", url.getHashingDoc()),
+    //                     Updates.set("urlsIn", url.getUrlsIn()),
+    //                     Updates.set("urlsOut", url.getUrlsOut()),
+    //                     Updates.set("baseUrl", url.getBaseUrl()),
+    //                     Updates.set("parents", url.getParents()),
+    //                     Updates.set("childern", url.getChildren()),
+    //                     Updates.set("isIndexed", url.isIndexed()),
+    //                     Updates.set("lastTime", url.getLastTime()),
+    //                     Updates.set("rank", url.getRank()),
+    //                     Updates.set("a", url.getChildTXt()),
+    //                     Updates.set("h1", url.getH1()),
+    //                     Updates.set("h2", url.getH2()),
+    //                     Updates.set("etag",url.getEtag()),
+    //                     Updates.set("lastModified",url.getLastModified())
+    //             );
+    //             com.mongodb.client.result.UpdateResult result = docCollection.updateOne(filter, update);
+    //             if (result.getMatchedCount() > 0) {
+    //                 updatedCount++;
+    //             }
+    //         }
+    //         logger.info("Successfully updated {} documents in MongoDB.", updatedCount);
+    //     } catch (MongoException e) {
+    //         logger.error("Failed to update batch: {}", e.getMessage());
+    //         throw new RuntimeException("Failed to update batch in MongoDB", e);
+    //     }
+    // }
+
+    public void updateBatch(List<Url> urls) {
+        try {
+            List<WriteModel<Document>> updates = new ArrayList<>();
+            for (Url url : urls) {
+                Bson filter = Filters.eq("url", url.getUrl());
+                Bson update = Updates.combine(
+                        Updates.set("title", url.getTitle()),
+                        Updates.set("content", url.getContent()),
+                        Updates.set("hashingDoc", url.getHashingDoc()),
+                        // Updates.set("urlsIn", url.getParents() != null ? url.getParents().size() : 0),
+                        // Updates.set("urlsOut", url.getChildren() != null ? url.getChildren().size() : 0),
+                        Updates.set("baseUrl", url.getBaseUrl()),
+                        Updates.set("parents", url.getParents() != null ? url.getParents() : new ArrayList<>()),
+                        Updates.set("children", url.getChildren() != null ? url.getChildren() : new ArrayList<>()),
+                        Updates.set("isIndexed", url.isIndexed()),
+                        Updates.set("lastTime", url.getLastTime()),
+                        Updates.set("rank", url.getRank()),
+                        Updates.set("a", url.getChildTxt()),
+                        Updates.set("h1", url.getH1()),
+                        Updates.set("h2", url.getH2()),
+                        Updates.set("etag", url.getEtag()),
+                        Updates.set("lastModified", url.getLastModified())
+                );
+                updates.add(new UpdateOneModel<>(filter, update, new UpdateOptions().upsert(true)));
+            }
+            BulkWriteResult result = docCollection.bulkWrite(updates);
+            logger.info("Successfully updated {} documents in MongoDB.", result.getModifiedCount());
+        } catch (MongoException e) {
+            logger.error("Failed to update batch: {}", e.getMessage());
+            throw new RuntimeException("Failed to update batch in MongoDB", e);
+        }
+    }
+
+    public List<Url> getUrlsBatch(int start, int end) {
+        List<Url> urls = new ArrayList<>();
+        FindIterable<Document> documents = docCollection.find()
+                .skip(start)
+                .limit(end - start);
+        for (Document doc : documents) {
+            urls.add(documentToUrl(doc));
+        }
+        return urls;
+    }
+
+    public List<String> findParents(String url) {
+        Document query = new Document("children", url);
+        return docCollection.find(query).into(new ArrayList<>()).stream()
+                .map(doc -> doc.getString("url"))
+                .collect(Collectors.toList());
+    }
+
+    public void addParentToUrl(String url, String parentUrl) {
+        System.out.println("in adddddd");
+        Document query = new Document("url", url);
+        Document update = new Document("$addToSet", new Document("parents", parentUrl));
+        docCollection.updateOne(query, update);
+    }
+
+    public List<Url> getAllUrlsSortedByRank() {
+        List<Url> urls = new ArrayList<>();
+        docCollection.find()
+                .sort(new Document("rank", -1)) // Sort by rank in descending order
+                .forEach(doc -> {
+                    Url url = new Url(doc.getString("url"));
+                    url.setTitle(doc.getString("title"));
+                    url.setContent(doc.getString("content"));
+                    url.setHashingDoc(doc.getString("hashingDoc"));
+                    // url.setUrlsIn(doc.getInteger("urlsIn", 0));
+                    // url.setUrlsOut(doc.getInteger("urlsOut", 0));
+                    url.setBaseUrl(doc.getString("baseUrl"));
+                    url.setParents(doc.get("parents", List.class));
+                    url.setChildren(doc.get("children", List.class));
+                    url.setIndexed(doc.getBoolean("isIndexed", false));
+                    url.setLastTime(doc.getLong("lastTime"));
+                    url.setRank(doc.getDouble("rank"));
+                    url.setH1(doc.getString("h1"));
+                    url.setH2(doc.getString("h2"));
+                    url.setChildTxt(doc.getString("a"));
+                    url.setEtag(doc.getString("etag"));
+                    url.setLastModified(doc.getString("lastModified"));
+                    urls.add(url);
+                });
+        return urls;
+    }
+
+    public Url getUrlByUrl(String url) {
+        Document query = new Document("url", url);
+        Document doc = docCollection.find(query).first();
+        return doc != null ? documentToUrl(doc) : null;
+    }
+
+    private Document urlToDocument(Url url) {
+        Document doc = new Document("url", url.getUrl())
+                .append("title", url.getTitle())
+                .append("content", url.getContent())
+                .append("hashingDoc", url.getHashingDoc())
+                // .append("urlsIn", url.getParents() != null ? url.getParents().size() : 0)
+                // .append("urlsOut", url.getChildren() != null ? url.getChildren().size() : 0)
+                .append("baseUrl", url.getBaseUrl())
+                .append("parents", url.getParents())
+                .append("children", url.getChildren())
+                .append("isIndexed", url.isIndexed())
+                .append("lastTime", url.getLastTime())
+                .append("rank", url.getRank())
+                .append("a", url.getChildTxt())
+                .append("h1", url.getH1())
+                .append("h2", url.getH2())
+                .append("etag", url.getEtag())
+                .append("lastModified", url.getLastModified());
+        return doc;
+    }
+
+    private Url documentToUrl(Document doc) {
+        Url url = new Url(doc.getString("url"));
+        url.setTitle(doc.getString("title"));
+        url.setContent(doc.getString("content"));
+        url.setHashingDoc(doc.getString("hashingDoc"));
+        url.setBaseUrl(doc.getString("baseUrl"));
+        url.setParents(doc.get("parents", List.class));
+        url.setChildren(doc.get("children", List.class));
+        url.setIndexed(doc.getBoolean("isIndexed", false));
+        url.setLastTime(doc.getLong("lastTime"));
+        url.setRank(doc.getDouble("rank"));
+        url.setH1(doc.getString("h1"));
+        url.setH2(doc.getString("h2"));
+        url.setChildTxt(doc.getString("a"));
+        url.setEtag(doc.getString("etag"));
+        url.setLastModified(doc.getString("lastModified"));
+        return url;
+    }
+    
+
+    public void updateUrlIfChanged(Url url, String newHash, Document updatedFields, List<String> newChildren) {
+        Document query = new Document("url", url.getUrl());
+        Document existingDoc = docCollection.find(query).first();
+        if (existingDoc == null) {
+            Document doc = urlToDocument(url);
+            doc.putAll(updatedFields);
+            doc.put("hashingDoc", newHash);
+            doc.put("children", newChildren);
+            docCollection.insertOne(doc);
+            return;
+        }
+
+        String existingHash = existingDoc.getString("hashingDoc");
+        if (existingHash != null && existingHash.equals(newHash)) {
+            docCollection.updateOne(
+                    query,
+                    new Document("$set", new Document("lastTime", System.currentTimeMillis()))
+            );
+        } else {
+            Document updateDoc = new Document("hashingDoc", newHash)
+                    .append("lastTime", System.currentTimeMillis())
+                    .append("children", newChildren)
+                    .append("urlsOut", newChildren != null ? newChildren.size() : 0)
+                    .append("linkStructureChanged", !newChildren.equals(existingDoc.get("children", List.class)));
+            updateDoc.putAll(updatedFields);
+            docCollection.updateOne(
+                    query,
+                    new Document("$set", updateDoc)
+            );
+        }
+    }
+
+    public void calculatePageRank() throws MongoException {
+        long totalUrls = docCollection.countDocuments();
+        if (totalUrls == 0) {
+            logger.info("No URLs in database for PageRank calculation");
+            return;
+        }
+        final double DAMPING_FACTOR = 0.85;
+        double baseScore = 1.0 - DAMPING_FACTOR;
+    
+        // Step 1: Initialize ranks if not set
+        docCollection.updateMany(
+            new Document("rank", new Document("$exists", false)),
+            new Document("$set", new Document("rank", 1.0 / totalUrls))
+        );
+    
+        // Iterate 10 times
+        for (int iteration = 0; iteration < 10; iteration++) {
+            logger.info("PageRank iteration {}/10", iteration + 1);
+    
+            // Reset newRank field for this iteration to 0
+            docCollection.updateMany(
+                new Document(),
+                new Document("$set", new Document("newRank", 0.0))
+            );
+    
+            // Step 2: Compute contributions from all URLs
+            int start = 0;
+            while (start < totalUrls) {
+                int end = (int) Math.min(start + BATCH_SIZE, totalUrls);
+                logger.debug("Processing batch: URLs {} to {}", start, end);
+    
+                // Fetch the current batch of URLs with their ranks and children
+                List<Document> batch = docCollection.find()
+                    .projection(new Document("url", 1).append("rank", 1).append("children", 1))
+                    .skip(start)
+                    .limit(BATCH_SIZE)
+                    .into(new ArrayList<>());
+    
+                if (batch.isEmpty()) {
+                    break;
+                }
+    
+                List<WriteModel<Document>> updates = new ArrayList<>();
+                for (Document doc : batch) {
+                    String url = doc.getString("url");
+                    Double currentRank = doc.getDouble("rank");
+                    if (currentRank == null) {
+                        logger.warn("Rank for URL {} is null, setting to default initial value", url);
+                        currentRank = 1.0 / totalUrls;
+                    }
+    
+                    List<String> children = doc.get("children", List.class);
+                    int outDegree = (children != null && !children.isEmpty()) ? children.size() : 1; // Avoid division by zero
+    
+                    double contribution = currentRank / outDegree;
+                    if (children != null && !children.isEmpty()) {
+                        for (String childUrl : children) {
+                            updates.add(new UpdateOneModel<>(
+                                new Document("url", childUrl),
+                                new Document("$inc", new Document("newRank", DAMPING_FACTOR * contribution)),
+                                new UpdateOptions().upsert(false)
+                            ));
+                        }
+                    }
+                }
+    
+                if (!updates.isEmpty()) {
+                    docCollection.bulkWrite(updates);
+                    logger.debug("Updated newRanks for {} URLs in batch", updates.size());
+                }
+    
+                start += BATCH_SIZE;
+            }
+    
+            // Step 3: Apply the PageRank formula for each URL
+            start = 0;
+            while (start < totalUrls) {
+                int end = (int) Math.min(start + BATCH_SIZE, totalUrls);
+                logger.debug("Applying PR formula for batch: URLs {} to {}", start, end);
+    
+                List<Document> batch = docCollection.find()
+                    .projection(new Document("url", 1).append("newRank", 1))
+                    .skip(start)
+                    .limit(BATCH_SIZE)
+                    .into(new ArrayList<>());
+    
+                if (batch.isEmpty()) {
+                    break;
+                }
+    
+                List<WriteModel<Document>> updates = new ArrayList<>();
+                for (Document doc : batch) {
+                    String url = doc.getString("url");
+                    Double newRankSum = doc.getDouble("newRank");
+                    if (newRankSum == null) {
+                        newRankSum = 0.0; // No incoming links, use base score
+                    }
+                    double newRank = baseScore + newRankSum;
+                    updates.add(new UpdateOneModel<>(
+                        new Document("url", url),
+                        new Document("$set", new Document("rank", newRank)),
+                        new UpdateOptions().upsert(false)
+                    ));
+                }
+    
+                if (!updates.isEmpty()) {
+                    docCollection.bulkWrite(updates);
+                    logger.debug("Applied PR formula for {} URLs in batch", updates.size());
+                }
+    
+                start += BATCH_SIZE;
+            }
+        }
+    
+        // Clean up temporary newRank field
+        docCollection.updateMany(
+            new Document(),
+            new Document("$unset", new Document("newRank", ""))
+        );
+    
+        logger.info("PageRank calculation completed for {} URLs", totalUrls);
     }
 
     // Optional: Close the connection
