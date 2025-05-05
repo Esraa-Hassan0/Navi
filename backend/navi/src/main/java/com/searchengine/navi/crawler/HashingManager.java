@@ -1,9 +1,9 @@
 // hash docs to check for duplicates
 package com.searchengine.navi.crawler;
 
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.nio.charset.StandardCharsets;
@@ -11,21 +11,14 @@ import java.nio.charset.StandardCharsets;
 // import org.apache.commons.codec.digest.DigestUtils;
 
 public class HashingManager {
-    HashMap<String, String> hashDoc;
-    Set<String> hashSet;
+    private final Set<String> hashSet = ConcurrentHashMap.newKeySet();
+    private int duplicateCount = 0;
 
-    public HashingManager(HashMap<String, String> hashDoc, Set<String> hashSet) {
-        this.hashDoc = hashDoc;
-        this.hashSet = hashSet;
+    public HashingManager() {
+
     }
 
-    public void addHashDoc(String doc) {
-        String hash = hashDoc(doc);
-        hashDoc.put(doc, hash);
-    }
-    
     public String hashDoc(String doc) {
-        // return DigestUtils.md5Hex(doc);
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
             md.update(doc.getBytes(StandardCharsets.UTF_8));
@@ -44,21 +37,29 @@ public class HashingManager {
     }
 
     public boolean checkHashDoc(String doc) {          // return true if doc is already in the hashSet
-        System.out.println("hash set " + hashSet);
         String hash = hashDoc(doc);
         if (hash == null) {
             return false;
         }
         if (hashSet.contains(hash)) {
+            duplicateCount++;
             return true;
-        } else {
+        }
+        return false;
+    }
+
+    public void addHashDoc(String doc) {               // add the hash to the hashSet
+        String hash = hashDoc(doc);
+        if (hash != null) {
             hashSet.add(hash);
-            return false;
         }
     }
 
     public Set<String> getHashDoc() {
-        return hashSet;
+        return new HashSet<>(hashSet);
     }
 
+    public int getDuplicateCount() {
+        return duplicateCount;
+    }
 }
