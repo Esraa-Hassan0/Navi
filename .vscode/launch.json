@@ -1,0 +1,25 @@
+{
+  "configurations": [
+    {
+      "type": "java",
+      "name": "DBManager",
+      "request": "launch",
+      "mainClass": "com.searchengine.dbmanager.DBManager",
+      "projectName": "navi"
+    },
+    {
+      "type": "java",
+      "name": "NaviApplication",
+      "request": "launch",
+      "mainClass": "com.searchengine.navi.NaviApplication",
+      "projectName": "navi"
+    },
+    {
+      "type": "java",
+      "name": "Launch Main with Increased Heap",
+      "request": "launch",
+      "mainClass": "com.searchengine.navi.indexer.Main",
+      "vmArgs": "-Xmx4g -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=./heapdump.hprof -Xss2m"
+    }
+  ]
+}

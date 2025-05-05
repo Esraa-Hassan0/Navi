@@ -121,10 +121,10 @@ public class Ranker {
 
         System.out.println("Time taken: " + durationInMillis + " ms");
 
-        for (ObjectId doc : sortedDocs) {
-            System.out.println(TEAL + "docId: " + doc + " score: " + scores.get(doc) +
-                    RESET);
-        }
+        // for (ObjectId doc : sortedDocs) {
+        // System.out.println(TEAL + "docId: " + doc + " score: " + scores.get(doc) +
+        // RESET);
+        // }
 
         return sortedDocs;
     }
@@ -178,21 +178,26 @@ public class Ranker {
             termPostings = dbManager.getWordsPostings(terms);
 
             for (String term : terms) {
-                List<Document> postings = termPostings.get(term);
+                if (IDFs.get(term) > 0) {
+                    List<Document> postings = termPostings.get(term);
 
-                // Add documents in common documents
-                for (Document posting : postings) {
-                    ObjectId docId = posting.getObjectId("docID");
+                    // Add documents in common documents
+                    for (Document posting : postings) {
+                        ObjectId docId = posting.getObjectId("docID");
 
-                    commonDocs.add(docId);
+                        commonDocs.add(docId);
+                    }
                 }
+
             }
 
             // Calculate all docsFieldLengths
             if (!commonDocs.isEmpty()) {
                 long startTime2 = System.nanoTime();
 
-                docFieldLengths = dbManager.getFieldOccurrencesForDocs(new ArrayList<>(commonDocs));
+                // docFieldLengths = dbManager.getFieldOccurrencesForDocs(new
+                // ArrayList<>(commonDocs));
+                docFieldLengths = dbManager.getFieldLengths(new ArrayList<>(commonDocs));
 
                 long endTime2 = System.nanoTime();
 
@@ -222,11 +227,11 @@ public class Ranker {
                 Double IDF = IDFs.get(term);
                 IDFs.put(term, IDF);
 
-                if (IDF == null) {
+                if (IDF == null || IDF < 0) {
                     continue;
                 }
 
-                // System.out.println(GREEN + "IDF: " + IDF + RESET);
+                System.out.println(GREEN + "IDF: " + IDF + RESET);
 
                 // Get postings of the term
                 List<Document> postings = termPostings.get(term);
@@ -597,7 +602,9 @@ public class Ranker {
         // terms.add("alyaa");
         // terms.add("hi");
         // terms.add("hey");
-        terms.add("polici");
+        terms.add("german");
+        terms.add("cancel");
+        terms.add("govern");
         // terms.add("these");
         // terms.add("term");
         ArrayList<Object> queryComponents2 = new ArrayList<>();

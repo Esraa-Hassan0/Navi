@@ -100,8 +100,8 @@ public class QueryEngine {
                     .map(stemmer::stem)
                     .collect(Collectors.toList()));
 
-            System.out.println("Tokens ");
-            System.out.println(tokens);
+            // System.out.println("Tokens ");
+            // System.out.println(tokens);
             return tokens;
         }
         // Process tokens
@@ -259,7 +259,7 @@ public class QueryEngine {
             int count = 0;
 
             if (!Tokens.isEmpty()) {
-                System.out.println(Tokens.get(0));
+                // System.out.println(Tokens.get(0));
                 for (String token : Tokens) {
                     if (window.contains(token)) {
                         count++;
@@ -306,14 +306,14 @@ public class QueryEngine {
     public Document getResults() {
         long prevTime = System.currentTimeMillis();
 
-        System.out.println("Tokens");
-        for (Object object : tokens) {
-            System.out.println(object);
-        }
-        System.out.println("queryComponents");
-        for (Object object : queryComponents) {
-            System.out.println(object);
-        }
+        // System.out.println("Tokens");
+        // for (Object object : tokens) {
+        // System.out.println(object);
+        // }
+        // System.out.println("queryComponents");
+        // for (Object object : queryComponents) {
+        // System.out.println(object);
+        // }
         // if(queryComponents.size())
         r = new Ranker(tokens, queryComponents);
         // r.sortDocs();
@@ -334,7 +334,7 @@ public class QueryEngine {
         System.out.println("Total time taken to search: " + elapsedTime + " ms");
         // Process documents
         for (Document result : results) {
-            System.out.println(result.get("_id"));
+            // System.out.println(result.get("_id"));
             String docURL = result.getString("url");
             String snippet = getSnippet(docURL); // use your actual snippet logic
             result.remove("content");

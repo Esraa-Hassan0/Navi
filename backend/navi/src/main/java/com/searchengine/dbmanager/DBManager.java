@@ -251,6 +251,32 @@ public class DBManager {
         return result;
     }
 
+    public HashMap<ObjectId, Map<String, Integer>> getFieldLengths(List<ObjectId> ids) {
+
+        // HashMap for field counts: ObjectId -> {fieldName -> count}
+        HashMap<ObjectId, Map<String, Integer>> fieldLengths = new HashMap<>();
+
+        try {
+            docCollection.find(Filters.in("_id", ids))
+                    .forEach(document -> {
+                        ObjectId id = document.getObjectId("_id");
+                        if (id != null) {
+                            Map<String, Integer> counts = new HashMap<>();
+                            counts.put("a", document.getInteger("aCount", 0));
+                            counts.put("h1", document.getInteger("h1Count", 0));
+                            counts.put("h2", document.getInteger("h2Count", 0));
+                            counts.put("other", document.getInteger("otherCount", 0));
+                            fieldLengths.put(id, counts);
+                        }
+                    });
+        } catch (MongoException e) {
+            System.err.println(e.getMessage());
+            e.printStackTrace();
+        }
+
+        return fieldLengths;
+    }
+
     public HashMap<String, Integer> getAllFieldsCount() {
         HashMap<String, Integer> fieldCounts = new HashMap<>();
         List<String> fields = Arrays.asList("h1", "h2", "a", "other");
@@ -558,6 +584,37 @@ public class DBManager {
             }
         } catch (MongoException e) {
             logger.error("Error retrieving document h2: {}", e.getMessage(), e);
+            return null;
+        }
+    }
+
+    public String getDocTitleById(String url) {
+        try {
+            Document filter = null;
+
+            // Determine which filter to use based on provided parameters
+            if (url != null && !url.trim().isEmpty()) {
+                // If URL is provided, use it as the primary search criteria
+                filter = new Document("url", url);
+            }
+
+            // Define which fields to retrieve
+            Document projection = new Document()
+                    .append("title", 1);
+
+            // Find and return the document
+            Document result = docCollection.find(filter)
+                    .projection(projection)
+                    .first();
+
+            if (result != null) {
+                return result.getString("title");
+            } else {
+                logger.warn("No document found with {} {}");
+                return null;
+            }
+        } catch (MongoException e) {
+            logger.error("Error retrieving document title: {}", e.getMessage(), e);
             return null;
         }
     }

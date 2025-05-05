@@ -76,20 +76,22 @@ public class Indexer {
         String H1 = dbmanager.getDocH1ById(url);
         String H2 = dbmanager.getDocH2ById(url);
         String content = dbmanager.getDocContentByURL(url);
-
+        String title = dbmanager.getDocTitleById(url);
 
         // Remove stopwords
         a = removeStopwords(a, stopWords);
         H1 = removeStopwords(H1, stopWords);
         H2 = removeStopwords(H2, stopWords);
         content = removeStopwords(content, stopWords);
+        title = removeStopwords(title, stopWords);
 
         int ACount = countWords(a);
         int H1Count = countWords(H1);
         int H2Count = countWords(H2);
-        int otherCount = countWords(content)-ACount-H1Count-H2Count;
+        int otherCount = countWords(content) - ACount - H1Count - H2Count;
+        H1Count += countWords(title);
 
-        dbmanager.appendTagCounts(id, H1Count, H2Count, ACount,otherCount);
+        dbmanager.appendTagCounts(id, H1Count, H2Count, ACount, otherCount);
 
     }
 

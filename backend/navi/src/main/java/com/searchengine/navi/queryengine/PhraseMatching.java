@@ -24,16 +24,16 @@ public class PhraseMatching {
         String[] words = phrase.toLowerCase().trim().split("\\s+");
 
         StringBuilder regex = new StringBuilder();
+        regex.append("\\b"); // Add word boundary at the start
         for (int i = 0; i < words.length; i++) {
             regex.append(Pattern.quote(words[i]));
             if (i < words.length - 1) {
                 regex.append("\\s+");
             }
         }
-        // regex.append("\b");
+        regex.append("\\b"); // Add word boundary at the end
 
         return regex.toString();
-
     }
     // ==================================================================================
     // ==========================NOTE: For testing purpose
