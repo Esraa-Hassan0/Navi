@@ -1,0 +1,108 @@
+.SearchPage {
+    position: relative;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background-color: #f5f5f5;
+  }
+  
+  .searchcontainer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+  }
+  
+  .rshape,
+  .lshape,
+  .bshape {
+    /* width: 100px; */
+    position: absolute;
+    z-index: -1;
+  }
+  
+  .rshape {
+    top: 0;
+    right: 0;
+  }
+  
+  .lshape {
+    bottom: 0;
+    left: 0;
+  }
+  
+  .bshape {
+    margin-bottom: -20px;
+    width: 10000px;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  
+  .center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    z-index: 2;
+  }
+  
+  .logo_Search {
+    margin-bottom: 20px;
+    width: 200px;
+  }
+  
+  .searchbar-container {
+    position: relative; /* For positioning the suggestions dropdown */
+    width: 500px; /* Match searchbar width */
+  }
+  
+  .searchbar {
+    display: flex;
+    align-items: center;
+    background-color: white;
+    border: 1px solid #ccc;
+    border-radius: 25px;
+    padding: 5px 10px;
+    width: 100%;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  }
+  
+  .searchbar input {
+    border: none;
+    outline: none;
+    padding: 10px;
+    font-size: 16px;
+    width: 100%;
+  }
+  
+  .suggestions-dropdown {
+    position: absolute;
+    top: 100%; /* Position directly below the search bar */
+    left: 0;
+    right: 0;
+    background-color: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 15px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    list-style: none;
+    padding: 5px 0;
+    margin: 0;
+    z-index: 10;
+  }
+  
+  .suggestion-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 15px;
+    font-size: 16px;
+    color: #333;
+    cursor: pointer;
+  }
+  
+  .suggestion-item:hover {
+    background-color: #f5f5f5;
+  }
