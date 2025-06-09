@@ -1,16 +1,22 @@
-# Navi
 
-Navigate the cutest search engine ever! 🎀
+<div align="center">
+<p>
+  <img width="720" height ="270" align="center" src="https://i.postimg.cc/1t4tBGTR/image.png" alt="navi"/>
+</p>
+<h1>
+    <img src="https://i.postimg.cc/5Npk88wk/ribbon.png" alt="ribbon" width="28" /> Navi <img src="https://i.postimg.cc/5Npk88wk/ribbon.png" alt="ribbon" width="28" />
+</h1>
+<p>Navigate the cutest search engine ever!</p>
+</div>
 
-## 🚀 What is Navi?
+## <img src="https://i.postimg.cc/x8ht8PrX/question-mark-1.pnghttps://i.postimg.cc/x8ht8PrX/question-mark-1.png" width = "28" /> What is Navi?
 
 **Navi** is a simple, modular search engine that demonstrates the core components of modern search systems. It features a **web crawler**, **indexer**, **ranking engine**, and **query processor**, all integrated through a fast and responsive web interface.
 
----
 
-## 🚀 Features
+## <img src="https://i.postimg.cc/SxFj7zkC/features-1.png" width = "28" /> Features
 
-### 🕷️ Crawler
+### <img src="https://i.postimg.cc/wjKwdFcP/web-1.png" width = "24" /> Crawler
 
 - Begins from a seed set of URLs and recursively fetches HTML pages.
     
@@ -25,7 +31,7 @@ Navigate the cutest search engine ever! 🎀
 - Gathers approximately **6000 HTML pages** for indexing.
     
 
-### 🗂️ Indexer
+### <img src="https://i.postimg.cc/k5mYWw28/card-index.png" width = "24" /> Indexer
 
 - Extracts and stores terms from HTML documents, distinguishing between:
     
@@ -44,7 +50,7 @@ Navigate the cutest search engine ever! 🎀
 - **Indexing time:** ~10 minutes for 6000 documents.
     
 
-### ⚖️ Ranker
+### <img src="https://i.postimg.cc/59RPsfHf/ranking-2.png" width = "24" /> Ranker
 
 Combines two scoring mechanisms for robust ranking:
 
@@ -71,7 +77,7 @@ Combines two scoring mechanisms for robust ranking:
 
 The final score is a hybrid of **relevance** and **popularity**, improving both precision and trustworthiness of results.
 
-### 🔎 Query Engine
+### <img src="https://i.postimg.cc/Qt66G30k/data-searching.png" width = "24" /> Query Engine
 
 - Supports single-word, multi-word, and **phrase searches** (with quotation marks).
     
@@ -98,19 +104,15 @@ The final score is a hybrid of **relevance** and **popularity**, improving both 
     - Boolean search: `AND`, `OR`, `NOT` operators (max 2 per query)
         
 
----
 
-## 🧱 Tech Stack
+## <img src="https://i.postimg.cc/XYrfz5CJ/coding-1.png" width = "26" /> Tech Stack
 
-| Layer    | Technology            |
-| -------- | --------------------- |
-| Backend  | **Java**, Spring Boot |
-| Frontend | **React.js**          |
-| Database | **MongoDB**           |
+- **Backend:** <img src="https://i.postimg.cc/KYv2bZmR/icons8-spring-boot-48.pnghttps://i.postimg.cc/KYv2bZmR/icons8-spring-boot-48.png" width = "16" /> Spring Boot
+- **Frontend:** <img src="https://i.imgur.com/ZAdKucE.png" width="14" /> React.js, <img src="https://i.imgur.com/hj45tsb.png" width="14" /> Figma
+- **Database:** <img src="https://i.postimg.cc/cLcSPKyp/icons8-mongodb-24.png" width = "16" /> MongoDB
 
----
 
-## 📦 How to Run
+## <img src="https://i.postimg.cc/Jh56xJXF/download.png" width = "28" /> How to Run
 
 1. **Clone the repository**
     
@@ -137,9 +139,8 @@ The final score is a hybrid of **relevance** and **popularity**, improving both 
     - Enter search queries and explore ranked results.
         
 
----
 
-## Contributors
+## <img src="https://i.postimg.cc/FKqjvH0Z/group-5.png" width = "28" /> Contributors
 
 | <a href="https://avatars.githubusercontent.com/AmiraKhalid04?v=4"><img src="https://avatars.githubusercontent.com/AmiraKhalid04?v=4" alt="Amira Khalid" width="150"></a> | <a href="https://avatars.githubusercontent.com/Esraa-Hassan0?v=4"><img src="https://avatars.githubusercontent.com/Esraa-Hassan0?v=4" alt="Esraa Hassan" width="150"></a> | <a href="https://avatars.githubusercontent.com/Alyaa242?v=4"><img src="https://avatars.githubusercontent.com/Alyaa242?v=4" alt="Alyaa Ali" width="150"></a> | <a href="https://avatars.githubusercontent.com/Hagar3bdelsalam?v=4"><img src="https://avatars.githubusercontent.com/Hagar3bdelsalam?v=4" alt="Hagar Abdelsalam" width="150"></a> |
 | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------: | :---------------------------------------------------------------------------------------------------------------------------------------------------------: | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------: |
