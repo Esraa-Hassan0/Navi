@@ -1,7 +1,7 @@
 
 <div align="center">
 <p>
-  <img width="720" height ="270" align="center" src="https://i.postimg.cc/1t4tBGTR/image.png" alt="navi"/>
+  <img width="720" height ="300" align="center" src="https://i.postimg.cc/zf0XcKdQ/image.png" alt="navi"/>
 </p>
 <h1>
     <img src="https://i.postimg.cc/5Npk88wk/ribbon.png" alt="ribbon" width="28" /> Navi <img src="https://i.postimg.cc/5Npk88wk/ribbon.png" alt="ribbon" width="28" />
